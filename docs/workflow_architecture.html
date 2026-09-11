@@ -1,0 +1,92 @@
+<div id="cd"></div>
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const themeMode = document.documentElement.dataset.mode;
+const dark = themeMode ? themeMode === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"anthropic-sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"anthropic-sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+  },
+});
+const src = `classDiagram
+  class registro_h {
+    +PC
+    +registros_generales
+    +flags
+  }
+  class contexto_h {
+    +struct Registros
+    +estado_proceso
+    +id_proceso
+  }
+  class interrupcion_h {
+    +numero
+    +prioridad
+    +tipo
+  }
+  class cpu_h {
+    +cpu_ejecutar_ciclo()
+    +cpu_atender_interrupcion()
+  }
+  class cpu_core_c {
+    +fetch_decode_execute()
+    +chequear_pendientes()
+  }
+  class context_switch_c {
+    +guardar_contexto()
+    +restaurar_contexto()
+  }
+  class vector_interrupciones_c {
+    +tabla_IVT
+    +registrar_handler()
+    +despachar()
+  }
+  class timer_c {
+    +generar_evento()
+  }
+  class teclado_c {
+    +generar_evento()
+  }
+  class excepciones_c {
+    +detectar_condicion()
+  }
+  class pic_c {
+    +arbitrar()
+    +enmascarar()
+  }
+  class scheduler_c {
+    +elegir_proceso()
+  }
+  class main_c {
+    +inicializar()
+    +loop_simulacion()
+  }
+
+  cpu_core_c ..> cpu_h : implementa
+  context_switch_c ..> contexto_h : usa
+  context_switch_c ..> registro_h : usa
+  vector_interrupciones_c ..> interrupcion_h : usa
+  cpu_core_c --> vector_interrupciones_c : consulta
+  cpu_core_c --> context_switch_c : invoca
+  timer_c --> pic_c : notifica
+  teclado_c --> pic_c : notifica
+  excepciones_c --> vector_interrupciones_c : dispara
+  pic_c --> cpu_core_c : interrumpe
+  pic_c --> scheduler_c : coordina
+  scheduler_c --> context_switch_c : invoca
+  main_c --> cpu_core_c : arranca
+  main_c --> pic_c : inicializa
+  main_c --> timer_c : inicializa
+  main_c --> teclado_c : inicializa
+`;
+const { svg } = await mermaid.render('cd-svg', src);
+document.getElementById('cd').innerHTML = svg;
+</script>
