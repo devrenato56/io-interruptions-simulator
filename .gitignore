@@ -1,0 +1,29 @@
+# Binarios y objetos compilados
+*.exe
+*.out
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dSYM/
+
+# Carpeta de build si usan una
+build/
+bin/
+obj/
+
+# VS Code (config personal, no del equipo)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Archivos del sistema operativo
+Thumbs.db
+.DS_Store
+
+# Logs si el simulador genera alguno
+*.log
