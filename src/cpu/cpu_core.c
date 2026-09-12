@@ -36,6 +36,9 @@ static Instruccion programa[] = {
     {INST_HALT, 0, 0} // CPU para, ni halt ni nop tienen operandos
 };
 
+// Stub estático para simulación de pic
+static int interrupcion_pendiente_simulada = 0;
+
 // Utilizaremos el tamaño de este mini programa para poder calcular y reaizar las operaciones con los registros
 // Es importante porque si se pasa del tamaño de indice del arreglo, el programa se muere
 static const unsigned int tam_prog = sizeof(programa) / sizeof(programa[0]);
@@ -126,7 +129,7 @@ static void cpu_execute(CPU* cpu, Instruccion instruccion) {
         case INST_SALTO:
 
             // Lo mismo que en SUMA, solo que con salto
-            if(instruccion.operando1 < 0 || instruccion.operando1 >= tam_prog) {
+            if(instruccion.operando1 < 0 || (unsigned int)instruccion.operando1 >= tam_prog) {
                 cpu->en_ejecucion = 0;
                 return;
             }
@@ -146,7 +149,7 @@ static void cpu_execute(CPU* cpu, Instruccion instruccion) {
 }
 
 void cpu_ejecutar_ciclo(CPU* cpu) {
-    //( Función de ejecución completa del fetch->decode->execute.
+    // Función de ejecución completa del fetch->decode->execute.
     if(!cpu) {
         return;
     }
@@ -158,4 +161,28 @@ void cpu_ejecutar_ciclo(CPU* cpu) {
     Instruccion instruccion = cpu_fetch(cpu);
     cpu_execute(cpu, instruccion);
 
+    if(cpu_hay_interrupcion_pendiente(cpu) == 1) {
+
+        Interrupcion interrupcion = {1, 1, INT_HARDWARE};
+        cpu_atender_interrupcion(cpu, &interrupcion);
+
+    }
+
+}
+
+int cpu_hay_interrupcion_pendiente(CPU* cpu) {
+    //Funión que simula un PIC
+    if(!cpu) {
+        return 0;
+    }
+
+    return interrupcion_pendiente_simulada;
+}
+
+void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion) {
+    if(!cpu || !interrupcion) {
+        return;
+    }
+
+    interrupcion_pendiente_simulada = 0;
 }
