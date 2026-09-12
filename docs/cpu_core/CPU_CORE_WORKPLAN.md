@@ -98,7 +98,7 @@ void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion);
 
 ---
 
-## SUBFASE 2 (encargado: Leonel) — Ciclo Fetch
+## SUBFASE 2 (encargado: Renato) — Ciclo Fetch
 
 -> Implementar `cpu_inicializar()`: pone el CPU en un estado inicial válido (PC en 0, registros en 0, flags limpias)
 -> Implementar la etapa de **fetch**: leer la "instrucción" en la posición actual del PC desde un arreglo simulado de instrucciones
@@ -118,7 +118,7 @@ void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion);
 -> Integrar el chequeo dentro de `cpu_ejecutar_ciclo()`: después de cada ciclo fetch-decode-execute, verificar si hay una interrupción pendiente
 -> Si hay una interrupción pendiente, el ciclo debe detener el flujo normal y llamar a `cpu_atender_interrupcion()` (la implementación real de qué hace esta función se conecta con la Fase 3 de Context Switching y la Fase 4 de IVT — por ahora puede ser un stub que solo imprime "interrupción detectada")
 
-## SUBFASE 5 (encargado: Renato) — Documentación y pruebas de integración interna
+## SUBFASE 5 (encargado: Leonel) — Documentación y pruebas de integración interna
 
 -> Documentar en comentarios el contrato de cada función pública de `cpu.h` (qué recibe, qué devuelve, qué efectos secundarios tiene)
 -> Escribir 3-4 casos de prueba en `tests/` que cubran: ciclo normal sin interrupciones, ciclo con una interrupción simulada, instrucción de salto, instrucción HALT
