@@ -38,4 +38,7 @@ extern const int         DEV_SERV[N_DISPOS];
 /* Etapas internas del ISR (1..7). */
 #define N_ETAPAS 7
 
+/* Entradas máximas de la bitácora en memoria (para la interfaz gráfica). */
+#define SIM_LOG_MAX 60
+
 #endif /* CONFIG_SIM_H */

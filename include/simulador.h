@@ -120,6 +120,12 @@ typedef struct {
     int driver_busy;
     int driver_dev;
 
+    /* --- Bitácora en memoria (más reciente primero), para la interfaz --- */
+    char logtxt[SIM_LOG_MAX][100];
+    int  logtag[SIM_LOG_MAX];   /* 0 = SYS, 1 = IRQ, 2 = DRV */
+    int  logt[SIM_LOG_MAX];     /* ciclo del evento */
+    int  nlog;
+
     /* --- Toggles / variantes didácticas --- */
     int t_anidar;              /* anidamiento con STI dentro del ISR */
     int t_eoi_temprano;        /* EOI antes de procesar el ISR */

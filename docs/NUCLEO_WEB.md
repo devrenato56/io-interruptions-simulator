@@ -36,29 +36,38 @@ Concepts*, Fig. 1.4) con:
 14. El driver se libera al terminar su trabajo.
 15. Comprobación de integridad de procesos bloqueados.
 
-## Compilar y ejecutar
+## Interfaz gráfica (Raylib) — el simulador interactivo
+
+La interfaz nativa reproduce el simulador web en tiempo real: escena de
+hardware (CPU + driver, PIC, controladores/dispositivos, buses, cola de
+listos), osciloscopio CLK/IRQ/INTA/EOI/DATA, flujo de la Fig. 1.4 con nodos que
+se iluminan, bitácora, IVT (clic para enmascarar) y métricas, con controles
+**Reproducir / Paso / Reiniciar**, los toggles **anidar / EOI temprano / E/S
+asíncrona** y un control de velocidad.
+
+Requiere **raylib**. En MSYS2/MinGW-w64 (UCRT64):
 
 ```bash
-make            # compila ./simulador
-make test       # compila y corre las pruebas de invariantes
-make run        # genera trace.csv (400 ciclos)
+pacman -S mingw-w64-ucrt-x86_64-raylib
+make            # compila ./simulador_gui
+./simulador_gui
+```
 
-./simulador --ciclos 400 --anidar --salida trace.csv   # con anidamiento
-./simulador --sincrono --verboso                        # bitácora por consola
+En Linux (apt/otro): instala `libraylib-dev` (o compílala) y `make`.
+
+## Simulador de consola / traza (opcional)
+
+Además de la GUI hay un binario sin interfaz que ejecuta N ciclos y emite una
+traza CSV (útil para pruebas o análisis):
+
+```bash
+make cli
+./simulador --ciclos 400 --anidar --salida trace.csv
+./simulador --sincrono --verboso        # bitácora por consola
 ```
 
 Opciones: `--ciclos N`, `--anidar`, `--eoi-temprano`, `--sincrono`,
 `--salida ARCH` (o `-` para no escribir), `--verboso`.
-
-## Visualización (equivalente local del web)
-
-El simulador emite una traza CSV (una fila por ciclo). El script de Python la
-anima con matplotlib:
-
-```bash
-python viz/animacion.py --entrada trace.csv          # en pantalla
-python viz/animacion.py --guardar salida.gif --fps 6 # exporta GIF
-```
 
 ## Pruebas
 
@@ -73,8 +82,8 @@ reales.
 include/config_sim.h        parámetros del modelo (dispositivos, prioridades, vectores)
 include/simulador.h         estado y API del motor
 src/nucleo/simulador.c      motor del ciclo de interrupciones
-src/nucleo/main_sim.c       CLI + escritura de la traza CSV
+src/nucleo/main_sim.c       binario de consola/traza (opcional)
+src/ui/main_gui.c           interfaz gráfica interactiva (Raylib)
 tests/test_interrupciones.c pruebas de invariantes
-viz/animacion.py            animación de la Fig. 1.4 desde la traza
-Makefile                    build (simulador, test, run)
+Makefile                    build (gui, cli, test, run)
 ```

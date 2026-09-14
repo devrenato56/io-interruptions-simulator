@@ -50,8 +50,19 @@ static const Paso PLAN[N_PROC][N_PASOS] = {
 
 /* --------------------------- utilidades --------------------------- */
 
-static void logmsg(const Simulador *S, const char *etq, const char *msg) {
+static void logmsg(Simulador *S, const char *etq, const char *msg) {
     if (sim_verboso) printf("  t%-4d [%s] %s\n", S->ciclo, etq, msg);
+    /* Guarda el evento en la bitácora en memoria (más reciente primero). */
+    int tag = (etq[0] == 'I') ? 1 : (etq[0] == 'D') ? 2 : 0;  /* IRQ / DRV / SYS */
+    for (int i = SIM_LOG_MAX - 1; i > 0; i--) {
+        memcpy(S->logtxt[i], S->logtxt[i - 1], sizeof S->logtxt[0]);
+        S->logtag[i] = S->logtag[i - 1];
+        S->logt[i]   = S->logt[i - 1];
+    }
+    snprintf(S->logtxt[0], sizeof S->logtxt[0], "%s", msg);
+    S->logtag[0] = tag;
+    S->logt[0]   = S->ciclo;
+    if (S->nlog < SIM_LOG_MAX) S->nlog++;
 }
 
 static void ready_push(Simulador *S, int id) {
