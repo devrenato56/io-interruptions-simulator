@@ -1,92 +1,87 @@
 # Plan de trabajo
 
-Este documento detalla las fases de desarrollo del simulador de interrupciones, el equipo responsable de cada una, qué entrega cada fase, sus dependencias, y la rama Git correspondiente.
+Este plan organiza el desarrollo de un simulador dedicado únicamente a interrupciones de entrada/salida (E/S). Las fases 1 y 2 son las únicas avanzadas actualmente.
 
 ## Resumen de fases
 
-| Fase | Equipo | Qué hará | Fase(s) limitante(s) | Rama Git |
-|---|---|---|---|---|
-| 1. Arquitectura base (interfaces/structs) | Persona 1 (solitario) | Definir estructuras compartidas: CPU, Registro, Interrupción, Contexto | Ninguna | `feature/arquitectura-base` |
-| 2. CPU Core (fetch-decode-execute) | Persona 2 y 3 | Loop de ejecución de instrucciones, PC, chequeo de interrupciones pendientes | Fase 1 | `feature/cpu-core` |
-| 3. Registros y Context Switching | Persona 4 y 5 | Guardar/restaurar contexto (registros, PC, flags) | Fase 1 | `feature/context-switching` |
-| 4. Tabla de Vectores de Interrupción (IVT) | Persona 6 y 7 | Estructura IVT y registro de handlers | Fase 1 | `feature/ivt` |
-| 5. Fuentes de interrupción (Timer, Teclado, Excepciones) | Persona 8 y 9 | Interrupciones de timer, teclado (I/O) y excepciones de software | Fase 3, Fase 4 | `feature/fuentes-interrupcion` |
-| 6. Controlador (PIC) y Scheduler | Persona 10 y 11 | Cola de interrupciones, prioridades, máscara de interrupciones, scheduler básico | Fase 2, Fase 3, Fase 4 | `feature/pic-scheduler` |
-| 7. Integración y Testing | Todos | Merge de ramas, pruebas de integración, logging final | Fases 2, 3, 4, 5, 6 | `feature/integracion-testing` |
+| Fase | Equipo | Qué hará | Fase(s) limitante(s) | Rama Git | Estado |
+|---|---|---|---|---|---|
+| 1. Arquitectura base | Persona 1 (solitario) | Definir CPU, Registro, Interrupción de E/S y Contexto | Ninguna | `feature/arquitectura-base` | Avanzada |
+| 2. CPU Core | Persona 2 y 3 | Ejecutar instrucciones y consultar una E/S pendiente entre ciclos | Fase 1 | `feature/cpu-core` | Avanzada |
+| 3. Guardado de contexto | Persona 4 y 5 | Guardar y restaurar PC, registros y flags | Fase 1 | `feature/context-switching` | Pendiente |
+| 4. IVT e ISR de E/S | Persona 6 y 7 | Asociar el número de vector con el manejador del dispositivo | Fase 1 | `feature/ivt` | Pendiente |
+| 5. Dispositivo de E/S | Persona 8 y 9 | Simular el teclado y generar su solicitud | Fase 1 | `feature/fuente-es` | Pendiente |
+| 6. Controlador de E/S | Persona 10 y 11 | Mantener, entregar y reconocer una solicitud pendiente | Fases 1, 2, 5 | `feature/pic-es` | Pendiente |
+| 7. Integración y pruebas | Todos | Unir y verificar el flujo completo de E/S | Fases 2, 3, 4, 5, 6 | `feature/integracion-testing` | Pendiente |
 
 ## Detalle por fase
 
-### Fase 1 — Arquitectura base (interfaces/structs)
-- **Equipo:** Persona 1 (solitario)
-- **Entregable:** Estructuras compartidas que usará todo el proyecto: CPU, Registro, Interrupción, Contexto.
-- **Depende de:** Ninguna fase — es el punto de partida.
-- **Rama:** `feature/arquitectura-base`
-- **Nota:** Es la única fase sin dependencias y bloquea, directa o indirectamente, a todas las demás. Los headers deben publicarse como contrato temprano para que las fases 2, 3 y 4 puedan comenzar en paralelo sin esperar la versión final.
+### Fase 1 - Arquitectura base
 
-### Fase 2 — CPU Core (fetch-decode-execute)
-- **Equipo:** Persona 2 y 3
-- **Entregable:** Loop de ejecución de instrucciones, manejo del contador de programa (PC), chequeo de interrupciones pendientes en cada ciclo.
-- **Depende de:** Fase 1
-- **Rama:** `feature/cpu-core`
+- Entregable: contratos mínimos compartidos en `include/`.
+- `Registro` conserva PC, registros generales y flags.
+- `Interrupcion` conserva el número de vector que identifica al dispositivo de E/S.
+- `CPU` expone inicialización, ejecución y los puntos de consulta y atención.
+- `Contexto` proporciona la base para conservar el estado interrumpido.
 
-### Fase 3 — Registros y Context Switching
-- **Equipo:** Persona 4 y 5
-- **Entregable:** Lógica para guardar y restaurar el contexto de un proceso (registros, PC, flags).
-- **Depende de:** Fase 1
-- **Rama:** `feature/context-switching`
+### Fase 2 - CPU Core
 
-### Fase 4 — Tabla de Vectores de Interrupción (IVT)
-- **Equipo:** Persona 6 y 7
-- **Entregable:** Estructura de la IVT y el mecanismo de registro de handlers (manejadores de interrupción).
-- **Depende de:** Fase 1
-- **Rama:** `feature/ivt`
+- Entregable: ciclo `fetch -> decode -> execute` con un programa simulado.
+- El CPU valida su estado y el límite del programa.
+- El chequeo de E/S ocurre después de terminar la instrucción actual.
+- La señal pendiente es temporal y será sustituida por la consulta al controlador de la Fase 6.
 
-### Fase 5 — Fuentes de interrupción (Timer, Teclado, Excepciones)
-- **Equipo:** Persona 8 y 9
-- **Entregable:** Generación de interrupciones de temporizador, interrupciones de teclado (E/S), y excepciones de software.
-- **Depende de:** Fase 3, Fase 4
-- **Rama:** `feature/fuentes-interrupcion`
+### Fase 3 - Guardado de contexto
 
-### Fase 6 — Controlador (PIC) y Scheduler
-- **Equipo:** Persona 10 y 11
-- **Entregable:** Cola de interrupciones, arbitraje por prioridades, máscara de interrupciones, y un scheduler básico.
-- **Depende de:** Fase 2, Fase 3, Fase 4
-- **Rama:** `feature/pic-scheduler`
+- Entregable: guardar y restaurar el estado del mismo flujo antes y después de la ISR.
+- No selecciona procesos ni implementa planificación.
+- Depende de la Fase 1.
 
-### Fase 7 — Integración y Testing
-- **Equipo:** Todos
-- **Entregable:** Merge de todas las ramas, pruebas de integración, logging final del sistema.
-- **Depende de:** Fases 2, 3, 4, 5, 6
-- **Rama:** `feature/integracion-testing`
-- **Nota:** No debe comenzar hasta que las fases 2, 3, 4, 5 y 6 tengan al menos una versión compilable en su respectiva rama.
+### Fase 4 - IVT e ISR de E/S
 
-## Diagrama de dependencias
+- Entregable: una tabla mínima que relacione el número de vector del teclado con su rutina de servicio.
+- La ISR procesa únicamente el evento del dispositivo de E/S.
+- Depende de la Fase 1.
 
+### Fase 5 - Dispositivo de E/S
+
+- Entregable: un teclado simulado capaz de producir una solicitud de interrupción.
+- No genera eventos periódicos ni condiciones internas del CPU.
+- Depende de la Fase 1.
+
+### Fase 6 - Controlador de E/S
+
+- Entregable: recibir la solicitud del teclado, marcarla como pendiente, entregarla al CPU y limpiarla al recibir el reconocimiento.
+- Al existir un único dispositivo, no incluye prioridades, máscaras, arbitraje ni scheduler.
+- Depende de las fases 1, 2 y 5.
+
+### Fase 7 - Integración y pruebas
+
+- Entregable: ejecutar el CPU, generar una E/S, atenderla mediante su ISR y verificar que el CPU retoma el estado anterior.
+- Debe incluir pruebas del flujo normal, solicitud pendiente, atención, reconocimiento y reanudación.
+- Depende de las fases 2 a 6.
+
+## Dependencias
+
+```text
+Fase 1 ──> Fase 2 ──────────────────────────────┐
+   ├─────> Fase 3 ──────────────────────────────┤
+   ├─────> Fase 4 ──────────────────────────────┤
+   └─────> Fase 5 ──> Fase 6 ──────────────────┤
+                                               v
+                                      Fase 7: integración
 ```
-                    Fase 1 (Arquitectura base)
-                            │
-          ┌─────────────────┼─────────────────┐
-          ▼                 ▼                 ▼
-      Fase 2            Fase 3            Fase 4
-    (CPU Core)      (Context Switch)      (IVT)
-          │                 │                 │
-          │                 └────────┬────────┘
-          │                          ▼
-          │                      Fase 5
-          │              (Fuentes de interrupción)
-          │                          │
-          └────────────┬─────────────┘
-                        ▼
-                    Fase 6
-              (PIC y Scheduler)
-                        │
-                        ▼
-                    Fase 7
-              (Integración y Testing)
-```
+
+## Fuera del alcance
+
+- Interrupciones de temporizador.
+- Interrupciones de software y llamadas al sistema.
+- Excepciones del CPU.
+- Scheduler, quantum y cambio entre procesos.
+- Arbitraje entre múltiples fuentes, prioridades y máscaras.
 
 ## Convenciones asociadas
 
-- Cada fase se desarrolla en su rama `feature/<nombre>` correspondiente, nunca directo sobre `main`.
-- Los cambios se integran a `main` vía Pull Request, revisados por al menos otra persona del equipo.
-- Cualquier cambio a los headers de la Fase 1 después de que otras fases ya dependan de ellos debe comunicarse al equipo antes de mergear.
+- Cada fase se desarrolla en su rama `feature/<nombre>` y se integra mediante Pull Request.
+- Los contratos de la Fase 1 deben mantenerse pequeños y orientados al flujo de E/S.
+- Una fase posterior no debe ampliar el alcance sin acuerdo previo del equipo.

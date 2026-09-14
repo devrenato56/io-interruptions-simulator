@@ -2,113 +2,84 @@
 
 ## Qué es esto
 
-Un simulador en C que reproduce, a nivel educativo, el mecanismo de interrupciones de un sistema operativo real. No es un sistema operativo funcional ni interactúa con hardware real — es una simulación por software que modela el flujo completo que ocurre cuando un dispositivo (o el propio programa) necesita la atención del CPU.
+Este proyecto es un simulador educativo en C del mecanismo de una interrupción de entrada/salida (E/S) en un sistema operativo. No interactúa con hardware real: representa el recorrido de una solicitud desde un dispositivo simulado hasta el CPU y el regreso a la ejecución interrumpida.
 
-El objetivo no es solo que el simulador "funcione", sino que el código refleje con la mayor fidelidad posible los conceptos teóricos vistos en clase: interrupciones de hardware vs. software, precisión de interrupciones, el controlador de interrupciones (PIC), el vector de interrupciones (IVT), el cambio de contexto, y el rol del scheduler en el tiempo compartido.
+El alcance se limita a interrupciones de E/S. No incluye interrupciones de temporizador, interrupciones de software, excepciones, llamadas al sistema, planificación de procesos ni cambio entre procesos.
 
-## Marco teórico que sustenta el diseño
+## Objetivo
 
-El simulador está construido sobre dos ejes de clasificación de interrupciones, tratados como independientes entre sí:
+El simulador debe mostrar de forma sencilla este comportamiento:
 
-**Según la fuente del evento:**
-- Hardware: E/S (teclado en este proyecto), temporizador, fallos de hardware
-- Software: trampas intencionales (syscalls) y excepciones no intencionales (división entre cero, fallo de página)
+1. El CPU ejecuta instrucciones mediante el ciclo `fetch -> decode -> execute`.
+2. Un dispositivo de E/S simulado genera una solicitud.
+3. Un controlador simple conserva la solicitud hasta que el CPU pueda atenderla.
+4. El CPU termina la instrucción actual y detecta la interrupción pendiente.
+5. Se guarda el estado mínimo del CPU.
+6. La IVT localiza la rutina de servicio correspondiente al dispositivo.
+7. La rutina atiende la E/S y reconoce la interrupción.
+8. Se restaura el estado y el CPU continúa desde el punto correcto.
 
-**Según la precisión del estado del CPU al momento de atender la interrupción** (Walker y Cragon, 1995):
-- Precisas: existe una frontera nítida entre instrucciones completadas y no ejecutadas
-- Imprecisas: el estado queda en un mosaico de instrucciones parcialmente ejecutadas
+La interrupción se comprueba entre instrucciones. De este modo, el estado guardado contiene instrucciones completamente terminadas y un `PC` válido para reanudar la ejecución.
 
-El simulador prioriza representar **interrupciones precisas**, ya que es el modelo necesario para poder reanudar un proceso interrumpido de forma correcta — algo indispensable en un simulador pedagógico donde se quiere mostrar el ciclo completo de guardar y restaurar contexto sin ambigüedad.
+## Estado actual
 
-## Plan de trabajo y fases
+Solo se consideran avanzadas las fases 1 y 2:
 
-| Fase | Equipo | Qué hará | Depende de | Rama Git |
+- Fase 1: contratos base para `CPU`, `Registro`, `Interrupcion` y `Contexto`.
+- Fase 2: ciclo básico del CPU y punto temporal de consulta de una E/S pendiente.
+
+Los archivos presentes de fases posteriores no se consideran implementaciones terminadas hasta que su fase correspondiente sea desarrollada y probada.
+
+## Plan de trabajo
+
+| Fase | Equipo | Entregable | Depende de | Rama Git |
 |---|---|---|---|---|
-| 1. Arquitectura base (interfaces/structs) | Persona 1 (solitario) | Definir estructuras compartidas: CPU, Registro, Interrupción, Contexto | Ninguna | `feature/arquitectura-base` |
-| 2. CPU Core (fetch-decode-execute) | Persona 2 y 3 | Loop de ejecución de instrucciones, PC, chequeo de interrupciones pendientes | Fase 1 | `feature/cpu-core` |
-| 3. Registros y Context Switching | Persona 4 y 5 | Guardar/restaurar contexto (registros, PC, flags) | Fase 1 | `feature/context-switching` |
-| 4. Tabla de Vectores de Interrupción (IVT) | Persona 6 y 7 | Estructura IVT y registro de handlers | Fase 1 | `feature/ivt` |
-| 5. Fuentes de interrupción (Timer, Teclado, Excepciones) | Persona 8 y 9 | Interrupciones de timer, teclado (I/O) y excepciones de software | Fase 3, Fase 4 | `feature/fuentes-interrupcion` |
-| 6. Controlador (PIC) y Scheduler | Persona 10 y 11 | Cola de interrupciones, prioridades, máscara de interrupciones, scheduler básico | Fase 2, Fase 3, Fase 4 | `feature/pic-scheduler` |
-| 7. Integración y Testing | Todos | Merge de ramas, pruebas de integración, logging final | Fases 2, 3, 4, 5, 6 | `feature/integracion-testing` |
+| 1. Arquitectura base | Persona 1 | Estructuras mínimas de CPU, registro, interrupción de E/S y contexto | Ninguna | `feature/arquitectura-base` |
+| 2. CPU Core | Persona 2 y 3 | Ciclo de instrucciones y comprobación de una E/S pendiente entre instrucciones | Fase 1 | `feature/cpu-core` |
+| 3. Guardado de contexto | Persona 4 y 5 | Guardar y restaurar PC, registros y flags del flujo interrumpido | Fase 1 | `feature/context-switching` |
+| 4. IVT e ISR de E/S | Persona 6 y 7 | Registrar y localizar el manejador del dispositivo por número de vector | Fase 1 | `feature/ivt` |
+| 5. Dispositivo de E/S | Persona 8 y 9 | Simular el teclado y emitir su solicitud de interrupción | Fase 1 | `feature/fuente-es` |
+| 6. Controlador de E/S | Persona 10 y 11 | Recibir, mantener, entregar y reconocer una solicitud pendiente | Fases 1, 2, 5 | `feature/pic-es` |
+| 7. Integración y pruebas | Todos | Demostrar y probar el flujo completo de interrupción de E/S | Fases 2, 3, 4, 5, 6 | `feature/integracion-testing` |
 
-**Nota sobre dependencias:** la Fase 1 es la única sin dependencias y bloquea directa o indirectamente a todas las demás. Para minimizar el cuello de botella, los headers de `include/` deben publicarse como contratos tempranos (aunque no estén 100% finalizados) para que las fases 2, 3 y 4 puedan comenzar a compilar contra ellos en paralelo.
+## Flujo del sistema
 
-## Workflow del sistema (flujo de ejecución)
-
-Esta es la secuencia completa que el simulador reproduce cada vez que ocurre una interrupción, de principio a fin:
-
+```text
+1. El teclado simulado completa una operación de E/S.
+                         |
+                         v
+2. El dispositivo notifica al controlador de interrupciones.
+                         |
+                         v
+3. El controlador conserva la solicitud como pendiente.
+                         |
+                         v
+4. El CPU termina su instrucción actual y consulta el controlador.
+                         |
+                         v
+5. El CPU guarda PC, registros generales y flags.
+                         |
+                         v
+6. El número de vector permite localizar la ISR de teclado.
+                         |
+                         v
+7. La ISR atiende la E/S y reconoce la solicitud.
+                         |
+                         v
+8. El CPU restaura su estado y continúa la ejecución normal.
 ```
-1. GENERACIÓN DEL EVENTO
-   Un dispositivo (teclado) termina su operación, o el temporizador
-   completa su cuenta, o el CPU detecta una condición de excepción.
-        │
-        ▼
-2. NOTIFICACIÓN AL CONTROLADOR (PIC)
-   El dispositivo/fuente impone una señal que el controlador de
-   interrupciones recibe y evalúa.
-        │
-        ▼
-3. ARBITRAJE
-   El PIC decide si atiende la interrupción de inmediato o la
-   posterga, según:
-     - si hay otra interrupción en curso
-     - la prioridad relativa del nuevo evento
-     - si esa línea de interrupción está enmascarada
-        │
-        ▼
-4. INTERRUPCIÓN AL CPU
-   El PIC emite la señal final hacia el CPU, junto con el número
-   que identifica la fuente del evento.
-        │
-        ▼
-5. GUARDADO DE CONTEXTO
-   El CPU detiene su ejecución normal. Antes de saltar al manejador,
-   se guarda el contexto del proceso interrumpido (PC, registros,
-   flags) usando las estructuras de contexto.h y registro.h.
-        │
-        ▼
-6. CONSULTA AL VECTOR DE INTERRUPCIONES (IVT)
-   El número de interrupción se usa como índice en la tabla IVT
-   para obtener la dirección del manejador (ISR) correspondiente.
-        │
-        ▼
-7. EJECUCIÓN DEL MANEJADOR (ISR)
-   Se ejecuta la rutina específica para ese evento (ISR de teclado,
-   ISR de timer, manejador de excepción).
-        │
-        ▼
-8. DECISIÓN DEL SCHEDULER (si aplica)
-   Si el evento fue el temporizador, o si el proceso interrumpido
-   quedó bloqueado, el scheduler decide qué proceso ejecuta a
-   continuación.
-        │
-        ▼
-9. CAMBIO DE CONTEXTO (si el scheduler eligió otro proceso)
-   Se restaura el contexto del proceso siguiente, sobrescribiendo
-   los registros del CPU con los valores guardados previamente
-   para ese proceso.
-        │
-        ▼
-10. RECONOCIMIENTO AL CONTROLADOR
-    El manejador de interrupciones le indica al PIC que ya se hizo
-    cargo, liberando esa línea para futuras interrupciones.
-        │
-        ▼
-11. RETORNO A EJECUCIÓN NORMAL
-    El CPU retoma el ciclo fetch-decode-execute, ya sea del proceso
-    original o del nuevo proceso elegido por el scheduler.
-```
+
+Como se simula un único dispositivo, el controlador no necesita prioridades, máscaras ni planificación. El número de vector basta para identificar la fuente y localizar su manejador.
 
 ## Convenciones de trabajo
 
-- Cada fase se desarrolla en su rama `feature/<nombre>` correspondiente, nunca directo sobre `main`.
-- Los cambios se integran a `main` vía Pull Request, revisados por al menos otra persona del equipo.
-- Cualquier cambio a los headers de `include/` (Fase 1) después de que otras fases ya dependan de ellos debe comunicarse al equipo antes de mergear, ya que rompe la compilación de las fases dependientes.
-- La Fase 7 (integración) no comienza hasta que las fases 2, 3, 4, 5 y 6 tengan al menos una versión compilable en su rama.
+- Cada fase se desarrolla en su rama `feature/<nombre>`.
+- Los cambios se integran a `main` mediante Pull Request y revisión de otra persona.
+- Los cambios a los headers de la Fase 1 deben comunicarse antes de integrar ramas dependientes.
+- Ninguna fase debe añadir temporizador, excepciones, interrupciones de software o scheduler.
+- La integración final comienza cuando las fases 2 a 6 tengan una versión compilable y probada.
 
 ## Referencias teóricas
 
-- Tanenbaum, A. — *Sistemas Operativos Modernos*, 3ª ed., Capítulo 1 (sección 1.3.5) y Capítulo 5 (secciones 5.1.5, 5.2.3, 5.3.1).
-- Wolf, G. et al. — *Fundamentos de Sistemas Operativos*, UNAM, 2015. Sección 2.2.2 "Interrupciones y excepciones".
-- Walker, D. y Cragon, H. — *Interrupt Processing in Pipelined Processors*, 1995. Fuente de las cuatro propiedades formales de interrupción precisa.
+- Tanenbaum, A. — *Sistemas Operativos Modernos*, 3.ª ed., secciones sobre E/S e interrupciones.
+- Wolf, G. et al. — *Fundamentos de Sistemas Operativos*, UNAM, 2015, sección 2.2.2.

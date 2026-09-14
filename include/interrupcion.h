@@ -1,27 +1,17 @@
 /*
-Archivo que define un struct con los conceptos fundamentales de una interrupcion.
+Archivo que define un struct con los datos de una interrupción de E/S.
 Aquí es donde el número que se almacena en la línea de bus (vector de interrupción)
-se materializa en memoria, y también se le asigna una prioridad a la interrupción.
+se materializa en memoria para identificar al dispositivo que solicita atención.
 */
 
 // Definimos el header de la interrupción
 #ifndef INTERRUPCION_H
 #define INTERRUPCION_H
 
-// Definimos los tipos de interrupción que tendremos en nuestro sistema
-typedef enum {
-
-    INT_HARDWARE, // Periféricos, mouse, teclado, etc
-    INT_SOFTWARE // Syscall, divisón entre cero, etc
-
-} TipoInterrupcion;
-
-// Definimos la estructura que tendrán las interrupciones con sus atributos
+// Definimos la estructura que tendrán las interrupciones de E/S
 typedef struct {
 
-    int numero; // Número de interrupción en la cola
-    int prioridad; // Qué tan importante es la interrupción del 0 (muy urgente) al 5 (menos urgente)
-    TipoInterrupcion tipo;
+    int numero; // Número de vector que identifica al dispositivo de E/S
 
 } Interrupcion;
 

@@ -1,91 +1,63 @@
-# Simulador de interrupciones
+# Simulador de interrupciones de E/S
 
-Simulador educativo en C que modela el mecanismo de interrupciones de hardware y software en un sistema operativo: dispositivos de E/S, controlador de interrupciones (PIC), vector de interrupciones (IVT), cambio de contexto y un scheduler básico.
+Simulador educativo en C del recorrido de una interrupción producida por un dispositivo de entrada/salida: solicitud del dispositivo, controlador simple, atención del CPU, guardado de estado, consulta de la IVT, ejecución de la ISR y retorno.
 
-Proyecto desarrollado como parte del curso de Sistemas Operativos, con el objetivo de traducir a código los conceptos teóricos de interrupciones precisas/imprecisas, multiprogramación y tiempo compartido.
+El proyecto no incluye interrupciones de software, temporizador, excepciones ni planificación de procesos. Actualmente solo se consideran avanzadas las fases 1 y 2: arquitectura base y CPU Core.
 
-## Stack tecnológico
+## Tecnología
 
 | Componente | Herramienta |
 |---|---|
-| Lenguaje | C (estándar C17) |
-| Compilador | GCC 16.2.0 (MSYS2 / MinGW-w64 UCRT64) |
-| Build system | Makefile (GNU Make) |
-| Editor | Visual Studio Code |
-| Extensiones | C/C++ (Microsoft, `ms-vscode.cpptools`) |
-| Debugger | GDB (incluido en MSYS2) |
+| Lenguaje | C17 |
+| Compilador | GCC / MinGW-w64 UCRT64 |
+| Build system | GNU Make |
 | Control de versiones | Git + GitHub |
-| Estrategia de ramas | `feature/<nombre-fase>`, integración vía Pull Request a `main` |
 
-### Por qué este stack
+No se utilizan frameworks ni dependencias externas. La simulación se ejecuta en consola y no interactúa con hardware real.
 
-- **C puro, sin dependencias externas**: cualquier integrante del equipo puede compilar sin instalar librerías adicionales, solo el compilador base.
-- **MSYS2/MinGW-w64 sobre Windows**: da acceso a GCC real (no MSVC), consistente con el estándar POSIX/GNU que se usa en la mayoría de material académico de sistemas operativos.
-- **Sin frameworks ni librerías gráficas**: el simulador es una aplicación de consola; toda la complejidad está en la lógica de interrupciones, no en la interfaz.
+## Estructura actual
 
-## Requisitos previos
-
-- GCC 16.2.0 o superior (via [MSYS2](https://www.msys2.org/))
-- GDB (incluido con MSYS2)
-- Make
-
-Verificar instalación:
-```bash
-gcc --version
-gdb --version
-make --version
+```text
+io-interruptions-simulator/
+|-- include/
+|   |-- contexto.h
+|   |-- cpu.h
+|   |-- interrupcion.h
+|   `-- registro.h
+|-- src/
+|   |-- contexto/context_switch.c
+|   |-- controlador/pic.c
+|   |-- cpu/cpu_core.c
+|   |-- fuentes/teclado.c
+|   |-- ivt/vector_interruptions.c
+|   `-- main.c
+|-- tests/test_integration.c
+|-- docs/
+|-- Makefile
+`-- README.md
 ```
 
-## Estructura del proyecto
+Los módulos de fases posteriores pueden existir como archivos preliminares, pero no se consideran implementados hasta completar su fase y sus pruebas.
 
-```
-simulador-interrupciones/
-├── README.md
-├── CONTEXT.md
-├── .gitignore
-├── Makefile
-│
-├── include/                # Headers compartidos (contratos entre fases)
-│   ├── cpu.h
-│   ├── registro.h
-│   ├── interrupcion.h
-│   └── contexto.h
-│
-├── src/
-│   ├── main.c               # Orquesta la simulación completa
-│   ├── cpu/
-│   │   └── cpu_core.c        # Ciclo fetch-decode-execute
-│   ├── contexto/
-│   │   └── context_switch.c  # Guardar/restaurar contexto
-│   ├── ivt/
-│   │   └── vector_interrupciones.c  # Tabla de vectores de interrupción
-│   ├── fuentes/
-│   │   ├── timer.c            # Interrupción de temporizador
-│   │   ├── teclado.c          # Interrupción de E/S
-│   │   └── excepciones.c      # Excepciones de software
-│   └── controlador/
-│       ├── pic.c               # Controlador de interrupciones (arbitraje, prioridades)
-│       └── scheduler.c         # Planificador de procesos
-│
-├── tests/
-│   └── test_integracion.c
-│
-└── docs/
-    └── decisiones_arquitectura.md
+## Compilar la prueba disponible
+
+Desde la raíz del proyecto:
+
+```powershell
+gcc -std=c17 -Wall -Wextra -Iinclude tests/test_integration.c src/cpu/cpu_core.c -o test_cpu.exe
+.\test_cpu.exe
 ```
 
-## Compilación y ejecución
+La prueba actual valida inicialización, NOP, suma, salto y detención del CPU.
 
-```bash
-make            # compila el proyecto
-./main.exe      # ejecuta el simulador (Windows)
-make clean      # limpia binarios generados
-```
+## Documentación
 
-## Equipo y responsabilidades
-
-Ver [CONTEXT.md](./CONTEXT.md) para el plan de trabajo completo, fases, y el flujo de funcionamiento del sistema.
+- [Contexto y flujo](docs/CONTEXT.md)
+- [Plan de trabajo](docs/WORKPLAN.md)
+- [Documentación del CPU Core](docs/cpu_core/CPU_CORE_DOCUMENTACION.md)
+- [Plan de la Fase 2](docs/cpu_core/CPU_CORE_WORKPLAN.md)
+- [Preparación del entorno](docs/IMPORTANT.md)
 
 ## Licencia
 
-Proyecto académico, uso educativo.
+Proyecto académico de uso educativo.

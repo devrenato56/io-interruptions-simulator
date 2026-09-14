@@ -1,6 +1,6 @@
 /*
-Ciclo fetch->decode->execute. Aquí se agrega un bloque nuevo que es la
-adición de un chequeador de interrupciones pendientes en cola.
+Ciclo fetch->decode->execute. Después de cada instrucción se comprueba
+si un dispositivo de E/S mantiene una solicitud de interrupción pendiente.
 */
 
 // Utilizamos el módulo principal que hemos creado hace un rato (header)
@@ -36,11 +36,11 @@ static Instruccion programa[] = {
     {INST_HALT, 0, 0} // CPU para, ni halt ni nop tienen operandos
 };
 
-// Stub estático para simulación de pic
-static int interrupcion_pendiente_simulada = 0;
+// Representamos temporalmente la señal pendiente de un dispositivo de E/S
+static int interrupcion_es_pendiente = 0;
 
-// Utilizaremos el tamaño de este mini programa para poder calcular y reaizar las operaciones con los registros
-// Es importante porque si se pasa del tamaño de indice del arreglo, el programa se muere
+// Utilizaremos el tamaño de este mini programa para validar el contador de programa
+// Es importante porque evita acceder a una posición que no pertenece al arreglo
 static const unsigned int tam_prog = sizeof(programa) / sizeof(programa[0]);
 
 void cpu_inicializar(CPU* cpu) {
@@ -60,7 +60,7 @@ void cpu_inicializar(CPU* cpu) {
     cpu->registro.PC = 0;
     cpu->registro.flags = 0;
 
-    // Llenamos todos los registgros con ceros
+    // Llenamos todos los registros con ceros
     for (int i = 0; i < 8; i++) {
 
         cpu->registro.registros_generales[i] = 0;
@@ -73,7 +73,7 @@ void cpu_inicializar(CPU* cpu) {
 // Recupera la información requerida del programa creado.
 static Instruccion cpu_fetch(CPU* cpu) {
     
-    // Comprobación de que el CPU está, sino, devuelve una instrucción halt de detención de cpu
+    // Comprobamos que el CPU exista; de lo contrario devolvemos una instrucción de detención
     if(!cpu) {
         
         Instruccion halt = {INST_HALT, 0, 0};
@@ -81,7 +81,7 @@ static Instruccion cpu_fetch(CPU* cpu) {
 
     }
 
-    // Comprobamos si el tamaño del program counter es mayor al del programa, para que no afecte a los registros
+    // Comprobamos que el contador de programa permanezca dentro del programa simulado
     if(cpu->registro.PC >= tam_prog) {
 
         Instruccion halt = {INST_HALT, 0, 0};
@@ -103,7 +103,7 @@ static void cpu_execute(CPU* cpu, Instruccion instruccion) {
 
     }
 
-    // Acá ejecutamos según el tipo de instrucción que vayamos a utilizar. Eso viene del fetch
+    // Ejecutamos la operación indicada por la instrucción obtenida durante el fetch
     switch (instruccion.tipo) {
 
         case INST_NOP:
@@ -114,7 +114,7 @@ static void cpu_execute(CPU* cpu, Instruccion instruccion) {
 
         case INST_SUMA:
 
-            // Comprobamos si el operando cabe en el indice de los registros
+            // Comprobamos si el operando cabe en el índice de los registros
             if(instruccion.operando1 < 0 || instruccion.operando1 >= 8) {
                 cpu->en_ejecucion = 0;
                 return;
@@ -134,7 +134,7 @@ static void cpu_execute(CPU* cpu, Instruccion instruccion) {
                 return;
             }
             
-            // Aquí obteneos el operando1 que resulta ser igual al Program Counter
+            // Actualizamos el contador de programa con el destino del salto
             cpu->registro.PC = instruccion.operando1;
             break;
         
@@ -163,7 +163,8 @@ void cpu_ejecutar_ciclo(CPU* cpu) {
 
     if(cpu_hay_interrupcion_pendiente(cpu) == 1) {
 
-        Interrupcion interrupcion = {1, 1, INT_HARDWARE};
+        // Creamos una interrupción de E/S identificada por su número de vector
+        Interrupcion interrupcion = {1};
         cpu_atender_interrupcion(cpu, &interrupcion);
 
     }
@@ -171,12 +172,12 @@ void cpu_ejecutar_ciclo(CPU* cpu) {
 }
 
 int cpu_hay_interrupcion_pendiente(CPU* cpu) {
-    //Funión que simula un PIC
+    // Función que consulta temporalmente una señal de E/S pendiente
     if(!cpu) {
         return 0;
     }
 
-    return interrupcion_pendiente_simulada;
+    return interrupcion_es_pendiente;
 }
 
 void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion) {
@@ -184,5 +185,6 @@ void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion) {
         return;
     }
 
-    interrupcion_pendiente_simulada = 0;
+    // Limpiamos la señal de E/S después de atenderla
+    interrupcion_es_pendiente = 0;
 }

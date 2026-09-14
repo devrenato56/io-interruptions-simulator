@@ -23,69 +23,54 @@ const src = `classDiagram
     +flags
   }
   class contexto_h {
-    +struct Registros
-    +estado_proceso
-    +id_proceso
+    +registro
   }
   class interrupcion_h {
-    +numero
-    +prioridad
-    +tipo
+    +numero_vector
   }
   class cpu_h {
     +cpu_ejecutar_ciclo()
+    +cpu_hay_interrupcion_pendiente()
     +cpu_atender_interrupcion()
   }
   class cpu_core_c {
     +fetch_decode_execute()
-    +chequear_pendientes()
+    +comprobar_es_pendiente()
   }
   class context_switch_c {
     +guardar_contexto()
     +restaurar_contexto()
   }
-  class vector_interrupciones_c {
-    +tabla_IVT
+  class vector_interruptions_c {
     +registrar_handler()
     +despachar()
   }
-  class timer_c {
-    +generar_evento()
-  }
   class teclado_c {
-    +generar_evento()
-  }
-  class excepciones_c {
-    +detectar_condicion()
+    +generar_solicitud_es()
   }
   class pic_c {
-    +arbitrar()
-    +enmascarar()
-  }
-  class scheduler_c {
-    +elegir_proceso()
+    +recibir_solicitud()
+    +entregar_solicitud()
+    +reconocer_solicitud()
   }
   class main_c {
     +inicializar()
-    +loop_simulacion()
+    +ejecutar_simulacion()
   }
 
   cpu_core_c ..> cpu_h : implementa
+  cpu_h ..> registro_h : contiene
+  cpu_h ..> interrupcion_h : atiende
   context_switch_c ..> contexto_h : usa
-  context_switch_c ..> registro_h : usa
-  vector_interrupciones_c ..> interrupcion_h : usa
-  cpu_core_c --> vector_interrupciones_c : consulta
-  cpu_core_c --> context_switch_c : invoca
-  timer_c --> pic_c : notifica
-  teclado_c --> pic_c : notifica
-  excepciones_c --> vector_interrupciones_c : dispara
-  pic_c --> cpu_core_c : interrumpe
-  pic_c --> scheduler_c : coordina
-  scheduler_c --> context_switch_c : invoca
-  main_c --> cpu_core_c : arranca
+  contexto_h ..> registro_h : conserva
+  teclado_c --> pic_c : solicita E/S
+  pic_c --> cpu_core_c : notifica
+  cpu_core_c --> context_switch_c : guarda y restaura
+  cpu_core_c --> vector_interruptions_c : consulta
+  vector_interruptions_c ..> interrupcion_h : usa vector
+  main_c --> cpu_core_c : ejecuta
+  main_c --> teclado_c : simula
   main_c --> pic_c : inicializa
-  main_c --> timer_c : inicializa
-  main_c --> teclado_c : inicializa
 `;
 const { svg } = await mermaid.render('cd-svg', src);
 document.getElementById('cd').innerHTML = svg;
