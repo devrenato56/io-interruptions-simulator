@@ -5,6 +5,7 @@ si un dispositivo de E/S mantiene una solicitud de interrupción pendiente.
 
 // Utilizamos el módulo principal que hemos creado hace un rato (header)
 #include "cpu.h"
+#include "pic.h" // Se incluye el controlador PIC
 
 // Definimos los tipos de instrucciones que utilizaremos
 typedef enum {
@@ -37,7 +38,7 @@ static Instruccion programa[] = {
 };
 
 // Representamos temporalmente la señal pendiente de un dispositivo de E/S
-static int interrupcion_es_pendiente = 0;
+// static int interrupcion_es_pendiente = 0;
 
 // Utilizaremos el tamaño de este mini programa para validar el contador de programa
 // Es importante porque evita acceder a una posición que no pertenece al arreglo
@@ -164,8 +165,13 @@ void cpu_ejecutar_ciclo(CPU* cpu) {
     if(cpu_hay_interrupcion_pendiente(cpu) == 1) {
 
         // Creamos una interrupción de E/S identificada por su número de vector
-        Interrupcion interrupcion = {1};
-        cpu_atender_interrupcion(cpu, &interrupcion);
+        Interrupcion interrupcion = pic_obtener_siguiente();
+        
+        // Verificamos que sea una interrupción válida (número distinto de -1)
+        if(interrupcion.numero != -1){
+            cpu_atender_interrupcion(cpu, &interrupcion);
+        }
+        
 
     }
 
@@ -177,7 +183,7 @@ int cpu_hay_interrupcion_pendiente(CPU* cpu) {
         return 0;
     }
 
-    return interrupcion_es_pendiente;
+    return pic_hay_pendientes();
 }
 
 void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion) {
@@ -186,5 +192,5 @@ void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion) {
     }
 
     // Limpiamos la señal de E/S después de atenderla
-    interrupcion_es_pendiente = 0;
+    //interrupcion_es_pendiente = 0;
 }

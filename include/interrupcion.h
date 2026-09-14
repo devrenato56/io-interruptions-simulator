@@ -10,9 +10,9 @@ se materializa en memoria para identificar al dispositivo que solicita atención
 
 // Definimos la estructura que tendrán las interrupciones de E/S
 typedef struct {
-
     int numero; // Número de vector que identifica al dispositivo de E/S
-
+    int prioridad; // Nivel de prioridad para el controlador (menor es mas prioritaria)
+    int tipo; // Tipo de interrupcion (ej. INT_HARDWARE)
 } Interrupcion;
 
 #endif
