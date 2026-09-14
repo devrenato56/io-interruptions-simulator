@@ -38,12 +38,19 @@ Concepts*, Fig. 1.4) con:
 
 ## Interfaz gráfica (Raylib) — el simulador interactivo
 
-La interfaz nativa reproduce el simulador web en tiempo real: escena de
-hardware (CPU + driver, PIC, controladores/dispositivos, buses, cola de
-listos), osciloscopio CLK/IRQ/INTA/EOI/DATA, flujo de la Fig. 1.4 con nodos que
-se iluminan, bitácora, IVT (clic para enmascarar) y métricas, con controles
-**Reproducir / Paso / Reiniciar**, los toggles **anidar / EOI temprano / E/S
-asíncrona** y un control de velocidad.
+La interfaz nativa reproduce el simulador web **en vivo** (cada ciclo se
+calcula en tiempo real): escena de hardware (CPU + driver, PIC,
+controladores/dispositivos, buses con flechas, cola de listos), osciloscopio
+CLK/IRQ/INTA/EOI/DATA, flujo de la Fig. 1.4 con nodos que se iluminan,
+bitácora, IVT (clic para enmascarar) y métricas, con controles **Reproducir /
+Paso / Reiniciar**, los toggles **anidar / EOI temprano / E/S asíncrona** y un
+control de velocidad.
+
+Lienzo tipo CAD: **rueda del ratón = zoom** al cursor, **arrastrar con botón
+derecho = mover**, **F = ajustar** todo a la ventana, **R = reiniciar vista**.
+La ventana es redimensionable. Cada panel se puede **mover** (arrastrando su
+barra de título) y **cerrar** (la **X**); el botón **Config** muestra u oculta
+cada vista y reinicia el layout.
 
 Requiere **raylib**. En MSYS2/MinGW-w64 (UCRT64):
 
