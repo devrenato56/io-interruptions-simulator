@@ -16,4 +16,16 @@ typedef struct {
 
 } Contexto;
 
+// Función que prepara el almacenamiento del contexto interrumpido
+int inicializar_contextos(void);
+
+// Función que guarda una copia de los registros antes de atender la E/S
+int guardar_contexto(const Registro* registro);
+
+// Función que restaura los registros para continuar la ejecución interrumpida
+int restaurar_contexto(Registro* registro);
+
+// Función que reinicia el almacenamiento al finalizar la simulación
+void liberar_contextos(void);
+
 #endif
