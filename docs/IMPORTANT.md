@@ -1,58 +1,54 @@
-# Proyecto SO - Simulador de interruptores
+# Proyecto SO - Simulador de interrupciones de E/S
 
-Hola! Esto lo está escribiendo el desarrollador de la arquitectura del sistema y el que dejó los comentarios de los archivos.
-Si te clonaste el repo y ya lo tienes en tu visual, o si simplemente lo estás leyendo desde GitHub, es importante que puedas
-leer esto, ya que sino, el proyecto no corre.
+## Alcance obligatorio
 
-# Compilador gcc
+El proyecto simula únicamente una interrupción producida por un dispositivo de entrada/salida. No se deben añadir interrupciones de software, temporizador, excepciones, scheduler ni cambio entre procesos.
 
-C corre con el compilador gcc. Por default, Windows no lo trae instalado. Entonces, es necesario que nosotros podamos instalarlo.
-Tendrás que irte al siguiente link: https://www.msys2.org/ y seleccionar la opción que no tenga el ARM64.
+Actualmente solo se consideran avanzadas la Fase 1, correspondiente a las estructuras e interfaces base, y la Fase 2, correspondiente al CPU Core.
 
-Luego de eso, ejecutas el .exe del instalador, le das clic a continuar, y cuando finalice la instalación, se te abrirá una pequeña
-terminal similar al git bash. En esta terminal, tipearás el siguiente comando:
+## Compilador GCC
 
-´pacman -Sys´
+El proyecto usa C17 y GCC. En Windows se recomienda instalar GCC mediante [MSYS2](https://www.msys2.org/) con el entorno UCRT64.
 
-pacman es un instalador de paquetes de Linux. Gracias a este, podrás descargar las dependencias necesarias. Una vez termine, el propio
-proceso te dirá que para proceder con la instalación, se debera cerrar la terminal (aparecerá un (Y/n), tú púlsas Y). La terminal se cierra, y tú la vuelves a abrir buscando "MSYS2" en tu buscador de windows. Abres la terminal y vuelves a ejecutar:
+Después de instalar MSYS2, abre su terminal y actualiza los paquetes:
 
-´pacman -Sys´
+```bash
+pacman -Syu
+```
 
-Y cuando termine, ejecutas:
+Si la terminal solicita cerrarse, vuelve a abrirla, repite la actualización e instala GCC:
 
-´pacman -S mingw-w64-ucrt-x86_64-gcc´
+```bash
+pacman -Syu
+pacman -S mingw-w64-ucrt-x86_64-gcc
+```
 
-Así, estarás instalando el compilador gcc. Luego para comprobar que se instaló, abres terminal en powershell o Command Prompt, y ejecutas:
+Agrega esta ruta al `PATH` de Windows si el comando `gcc` no está disponible:
 
-´gcc --version´
-
-Si no te aparece nada, es porque falta agregarlo al PATH, entonces:
-Vas al buscador de windows -> variables de entorno -> editar variables de entorno -> PATH -> Nuevo y añades la siguiente ruta:
-
+```text
 C:\msys64\ucrt64\bin
+```
 
-Esta ruta que añadiste es la de instalación del compilador.
-OJO: En caso por haber trabajado con C++ antes y eso, pulsarás la opción "Subir" para el path que añadiste recientemente, hasta que
-quede encima por el PATH del compilador gcc antiguo que instalaste. Esto se hace porque si vuelves a ejecutar:
+Comprueba la instalación desde PowerShell o Command Prompt:
 
-´where gcc´
+```powershell
+gcc --version
+where.exe gcc
+```
 
-Te saldrá primero la ruta del compilador antiguo, queriendo decir que lo está seleccionando antes a ese que al que tú descargaste.
-Entonces, una vez teniendo encuenta eso y habiendo agregado al compilador al PATH, volvemos a ejecutar:
+Si existe otra instalación de GCC, la ruta de UCRT64 debe aparecer primero en `PATH` para que todo el equipo utilice el mismo compilador.
 
-´gcc --version´
-´where gcc´
+## Editor
 
-Y debería estar todo OK.
+Visual Studio Code con la extensión C/C++ de Microsoft permite completar código, detectar errores y depurar. También puede usarse cualquier editor que respete la configuración y los comandos del proyecto.
 
-# Extension de VS CODE
+## Prueba disponible
 
-Recomiendo usar VS CODE para este proyecto y no antigravity porque VS CODE tiene una extensión desarrollada por Microsoft para C y C++.
-Entonces, es más viable trabajar en VS CODE. De todas maneras, si desean usar Antigravity, pueden usarlo en CLI descargandolo en su
-terminal.
+Desde la raíz del repositorio, compila la prueba de las fases 1 y 2:
 
-Una vez hecho eso, pueden correr cualquier archivo de C en su editor de texto VS CODE. El comando para ejecutar el main es:
+```powershell
+gcc -std=c17 -Wall -Wextra -Iinclude tests/test_integration.c src/cpu/cpu_core.c -o test_cpu.exe
+.\test_cpu.exe
+```
 
-´gcc main.c -o main.exe´ (Compila el archivo)
-´.\main.exe´ (Ejecuta el archivo SIEMPRE Y CUANDO estés parado en el directorio raíz, sino el comando se modifica)
+La prueba actual valida el ciclo básico del CPU. La demostración completa de E/S se añadirá cuando estén implementadas las fases posteriores.

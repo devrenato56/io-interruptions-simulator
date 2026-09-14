@@ -1,6 +1,6 @@
 /*
-Declaración de funciones públicas que invocan una llamada al CPU.
-La utilizarán el resto de archivos.
+Declaración de la estructura del CPU y de sus funciones públicas.
+Estas funciones permiten ejecutar instrucciones y comprobar solicitudes de E/S.
 */
 
 // Definimos el módulo completo de CPU
@@ -14,8 +14,8 @@ La utilizarán el resto de archivos.
 // Definimos la estructura general del estado del CPU
 typedef struct {
 
-    int en_ejecucion; // Sabremos si hay algún proceso en ejecucion o no
-    Registro registro; // Registro en el que se guarda el estado
+    int en_ejecucion; // Indica si el CPU debe continuar ejecutando instrucciones
+    Registro registro; // Estado actual de los registros del CPU
 
 } CPU;
 
@@ -25,10 +25,10 @@ void cpu_inicializar(CPU* cpu);
 // Función de ejecución del fetch -> decode -> execute
 void cpu_ejecutar_ciclo(CPU* cpu);
 
-// Función que identifica cuándo hay una interrupción en espera
+// Función que identifica cuándo hay una interrupción de E/S en espera
 int cpu_hay_interrupcion_pendiente(CPU* cpu);
 
-// Función que atiende interrupciones
+// Función que atiende una interrupción de E/S detectada por el CPU
 void cpu_atender_interrupcion(CPU* cpu, Interrupcion* interrupcion);
 
 #endif

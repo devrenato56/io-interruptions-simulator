@@ -1,7 +1,7 @@
 /*
-Archivo que sirve para poder guardar el estado del proceso en el CPU. Este se guarda en los registros,
+Archivo que define el estado observable del CPU. Este se guarda en los registros,
 pequeños elementos que se encuentran exactamente en el procesador. Aquí se guardan cosas como el contador del programa,
-las flags, entre otros. Aquí es donde vuelve el CPU para recuperar su estado anterior a la interrupción.
+las flags, entre otros. Este estado permite continuar la ejecución después de una interrupción de E/S.
 */
 
 // Comenzamos definiendo el registro y los atributos que contendrá su struct
@@ -11,7 +11,7 @@ las flags, entre otros. Aquí es donde vuelve el CPU para recuperar su estado an
 typedef struct {
 
     unsigned int PC; // Program Counter, indica la próxima instrucción que el CPU ejecutará
-    int registros_generales[8]; // Registros simples, array de 8, permitirán instrucciones como SUMA, CARGA.
+    int registros_generales[8]; // Registros simples, array de 8, permitirán instrucciones como SUMA y CARGA
     unsigned char flags; // Condiciones del último resultado (cero, acarreo, error, etc)
 
 } Registro;
