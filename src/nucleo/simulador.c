@@ -4,11 +4,12 @@
 #include <stdio.h>
 #include <string.h>
 #include "simulador.h"
+#include "teclado.h"
 
 int sim_verboso = 0;
 const char *const DEV_NOMBRE[N_DISPOS] = { "Disco", "Teclado" };
 const int DEV_PRIO[N_DISPOS] = { 0, 1 };
-const int DEV_VEC[N_DISPOS] = { 0x21, 0x22 };
+const int DEV_VEC[N_DISPOS] = { 0x21, VECTOR_TECLADO };
 const int DEV_SERV[N_DISPOS] = { 6, 4 };
 
 static void logmsg(Simulador *S, const char *etq, const char *msg) {
@@ -29,19 +30,50 @@ void sim_mascara(const int reg[N_DISPOS], char out[N_DISPOS + 1]) {
     out[N_DISPOS] = '\0';
 }
 
-int sim_solicitar_es(Simulador *S, int d) {
+static int solicitar_dato(Simulador *S, int d, int dato) {
     if (!S || d < 0 || d >= N_DISPOS) return -1;
     Dispositivo *D = &S->dev[d];
     if (D->n_cola + D->n_pendientes + (D->sirviendo >= 0) >= MAX_SOLICITUDES)
         return -1;
     int id = S->siguiente_solicitud++;
+    D->datos_cola[D->n_cola] = dato;
     D->cola[D->n_cola++] = id;
     S->driver_busy = 4;
     S->driver_dev = d;
     char buf[100];
-    snprintf(buf, sizeof buf, "Driver -> %s: inicia E/S #%d.", DEV_NOMBRE[d], id);
+    if (d == DEV_TECLADO)
+        snprintf(buf, sizeof buf, "Tecla U+%04X -> lectura #%d.", dato, id);
+    else
+        snprintf(buf, sizeof buf, "Driver -> Disco: lee bloque %d, E/S #%d.", dato, id);
     logmsg(S, "DRV", buf);
     return id;
+}
+
+int sim_teclear(Simulador *S, int caracter) {
+    if (caracter != 8 && caracter != 13 &&
+        (caracter < 32 || caracter > 0x10ffff ||
+         (caracter >= 0xd800 && caracter <= 0xdfff))) return -1;
+    return solicitar_dato(S, DEV_TECLADO, caracter);
+}
+
+int sim_leer_disco(Simulador *S, int bloque) {
+    if (bloque < 0 || bloque >= N_BLOQUES_DISCO) return -1;
+    return solicitar_dato(S, DEV_DISCO, bloque);
+}
+
+int sim_solicitar_es(Simulador *S, int d) {
+    return solicitar_dato(S, d, d == DEV_TECLADO ? 'A' : 0);
+}
+
+/* Traduce el vector entregado por la fuente a la linea del PIC. */
+static void pic_recibir(Simulador *S, Interrupcion interrupcion) {
+    for (int d = 0; d < N_DISPOS; d++) {
+        if (DEV_VEC[d] != interrupcion.numero) continue;
+        S->pic.irr_count[d]++;
+        S->pic.irr[d] = 1;
+        if (S->irq_alzada_en[d] < 0) S->irq_alzada_en[d] = S->ciclo;
+        return;
+    }
 }
 
 static void avanzar_dispositivos(Simulador *S) {
@@ -49,7 +81,11 @@ static void avanzar_dispositivos(Simulador *S) {
         Dispositivo *D = &S->dev[d];
         if (D->sirviendo < 0 && D->n_cola > 0) {
             D->sirviendo = D->cola[0];
-            for (int i = 1; i < D->n_cola; i++) D->cola[i - 1] = D->cola[i];
+            D->dato_servicio = D->datos_cola[0];
+            for (int i = 1; i < D->n_cola; i++) {
+                D->cola[i - 1] = D->cola[i];
+                D->datos_cola[i - 1] = D->datos_cola[i];
+            }
             D->n_cola--;
             D->restante = DEV_SERV[d];
             D->reloj = 0;
@@ -58,10 +94,11 @@ static void avanzar_dispositivos(Simulador *S) {
         D->reloj++;
         D->restante -= S->t_asincrono ? D->reloj % 2 == 0 : 1;
         if (D->restante > 0) continue;
-        D->pendientes[D->n_pendientes++] = (FinalizacionES){D->sirviendo, S->ciclo};
-        S->pic.irr_count[d]++;
-        S->pic.irr[d] = 1;
-        if (S->irq_alzada_en[d] < 0) S->irq_alzada_en[d] = S->ciclo;
+        D->pendientes[D->n_pendientes++] = (FinalizacionES){D->sirviendo, S->ciclo, D->dato_servicio};
+        Interrupcion interrupcion = d == DEV_TECLADO
+            ? teclado_generar_interrupcion()
+            : (Interrupcion){DEV_VEC[d]};
+        pic_recibir(S, interrupcion);
         char buf[100];
         snprintf(buf, sizeof buf, "%s: transferencia #%d completa -> IRQ.",
                  DEV_NOMBRE[d], D->sirviendo);
@@ -138,6 +175,26 @@ static void entrar_isr(Simulador *S, int d) {
 static void aplicar_efecto(Simulador *S) {
     Dispositivo *D = &S->dev[S->intr_dev];
     D->ultima_atendida = D->pendientes[0].id;
+    D->ultimo_dato = D->pendientes[0].dato;
+    if (S->intr_dev == DEV_TECLADO) {
+        if (D->ultimo_dato == 8) {
+            if (S->n_texto > 0) S->n_texto--;
+        } else {
+            if (S->n_texto == 32) {
+                memmove(S->texto, S->texto + 1, 31 * sizeof S->texto[0]);
+                S->n_texto--;
+            }
+            S->texto[S->n_texto++] = D->ultimo_dato;
+        }
+    } else {
+        static const char *const bloques[N_BLOQUES_DISCO] = {
+            "Bloque 0: HOLA DESDE EL DISCO",
+            "Bloque 1: DATOS DE PRUEBA",
+            "Bloque 2: LECTURA POR INTERRUPCIONES",
+            "Bloque 3: FIN DEL ARCHIVO"
+        };
+        snprintf(S->resultado_disco, sizeof S->resultado_disco, "%s", bloques[D->ultimo_dato]);
+    }
     for (int i = 1; i < D->n_pendientes; i++) D->pendientes[i - 1] = D->pendientes[i];
     D->n_pendientes--;
     D->completadas++;

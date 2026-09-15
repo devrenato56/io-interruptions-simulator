@@ -6,6 +6,7 @@
 typedef struct {
     int id;
     int ciclo_irq;
+    int dato;                 /* punto Unicode o numero de bloque */
 } FinalizacionES;
 
 typedef struct {
@@ -13,11 +14,14 @@ typedef struct {
     int restante;
     int reloj;                 /* tiempo de servicio, no genera IRQ por si solo */
     int cola[MAX_SOLICITUDES];  /* solicitudes pendientes de transferencia */
+    int datos_cola[MAX_SOLICITUDES];
+    int dato_servicio;
     int n_cola;
     FinalizacionES pendientes[MAX_SOLICITUDES]; /* transferidas, esperan ISR */
     int n_pendientes;
     int completadas;           /* solicitudes atendidas por la ISR */
     int ultima_atendida;
+    int ultimo_dato;
 } Dispositivo;
 
 /* PIC didactico: IRR/IMR/ISR y conteo de eventos por linea. */
@@ -81,6 +85,9 @@ typedef struct {
     int t_eoi_temprano;
     int t_asincrono;
     int t_demo;                /* peticiones automaticas del flujo de CPU */
+    int texto[32];             /* caracteres entregados por la ISR */
+    int n_texto;
+    char resultado_disco[64];  /* visible solo despues de atender la ISR */
 } Simulador;
 
 void sim_init(Simulador *S);
@@ -88,6 +95,9 @@ void sim_tick(Simulador *S);
 /* Devuelve ID positivo, o -1 si el dispositivo es invalido o esta lleno.
  * Rechazar una solicitud no modifica el estado ni genera una IRQ. */
 int sim_solicitar_es(Simulador *S, int dispositivo);
+int sim_teclear(Simulador *S, int caracter);
+#define N_BLOQUES_DISCO 4
+int sim_leer_disco(Simulador *S, int bloque);
 /* Orden de bits: Disco, Teclado. */
 void sim_mascara(const int reg[N_DISPOS], char out[N_DISPOS + 1]);
 

@@ -6,6 +6,28 @@
 
 ![Interfaz de E/S con disco y teclado](img/captura_gui.png)
 
+## Prueba manual de teclado y disco
+
+La GUI inicia en pausa y sin solicitudes automáticas. Enfoca la ventana,
+deja **Capturar teclado** activo y escribe `A`. La pulsación queda en cola.
+Pulsa **Paso** repetidamente o **Reproducir**: el servicio termina, aparece
+una IRQ, el PIC la entrega, la CPU guarda contexto y la ISR entrega `A` a
+**Teclado / ISR**. Después se emite EOI y se restaura el contexto.
+El teclado usa eventos de texto de la ventana; no captura teclas fuera de ella.
+Retroceso también se atiende por interrupción; Enter aparece como `|`.
+
+Para disco, selecciona **Bloque 2** con los botones **+ / -** y pulsa
+**Leer disco**. Avanza la simulación: driver, cola, transferencia, IRQ, PIC,
+ISR, EOI y retorno. El resultado será
+`Bloque 2: LECTURA POR INTERRUPCIONES` en **Disco / ISR**.
+Es un disco simulado en memoria y no accede a tus archivos.
+
+Para comprobar máscaras, enmascara una fuente haciendo clic en su fila de
+la IVT, genera una entrada y avanza varios ciclos. Su IRQ quedará pendiente
+y el resultado no aparecerá hasta desenmascararla y atender la ISR.
+En pausa puedes preparar simultáneamente entradas de teclado y disco.
+La consola sigue siendo una demostración automática.
+
 ---
 
 ## 1. ¿Qué es este programa?
@@ -146,8 +168,8 @@ Opciones: `--ciclos N`, `--anidar`, `--eoi-temprano`, `--sincrono`,
 
 - **Zoom:** rueda del ratón (hace zoom hacia donde apunta el cursor).
 - **Mover / desplazar:** arrastra con el **botón derecho** del ratón.
-- **Ajustar todo a la ventana:** botón **Ajustar** o tecla **F**.
-- **Reiniciar la vista:** tecla **R**.
+- **Ajustar todo a la ventana:** botón **Ajustar**.
+- Las letras F y R se envían al teclado simulado; no son atajos de la vista.
 - **Mover un panel:** arrástralo desde su **barra de título**.
 - **Cerrar un panel:** la **X** en su esquina superior derecha.
 - **Volver a mostrar paneles:** botón **Config** → marca la vista, o

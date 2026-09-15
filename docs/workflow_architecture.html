@@ -16,61 +16,19 @@ mermaid.initialize({
     textColor: dark ? '#c2c0b6' : '#3d3d3a',
   },
 });
-const src = `classDiagram
-  class registro_h {
-    +PC
-    +registros_generales
-    +flags
-  }
-  class contexto_h {
-    +registro
-  }
-  class interrupcion_h {
-    +numero_vector
-  }
-  class cpu_h {
-    +cpu_ejecutar_ciclo()
-    +cpu_hay_interrupcion_pendiente()
-    +cpu_atender_interrupcion()
-  }
-  class cpu_core_c {
-    +fetch_decode_execute()
-    +comprobar_es_pendiente()
-  }
-  class context_switch_c {
-    +guardar_contexto()
-    +restaurar_contexto()
-  }
-  class vector_interruptions_c {
-    +registrar_handler()
-    +despachar()
-  }
-  class teclado_c {
-    +generar_solicitud_es()
-  }
-  class pic_c {
-    +recibir_solicitud()
-    +entregar_solicitud()
-    +reconocer_solicitud()
-  }
-  class main_c {
-    +inicializar()
-    +ejecutar_simulacion()
-  }
-
-  cpu_core_c ..> cpu_h : implementa
-  cpu_h ..> registro_h : contiene
-  cpu_h ..> interrupcion_h : atiende
-  context_switch_c ..> contexto_h : usa
-  contexto_h ..> registro_h : conserva
-  teclado_c --> pic_c : solicita E/S
-  pic_c --> cpu_core_c : notifica
-  cpu_core_c --> context_switch_c : guarda y restaura
-  cpu_core_c --> vector_interruptions_c : consulta
-  vector_interruptions_c ..> interrupcion_h : usa vector
-  main_c --> cpu_core_c : ejecuta
-  main_c --> teclado_c : simula
-  main_c --> pic_c : inicializa
+const src = `flowchart TD
+  cli["main_sim.c: consola"] --> motor["simulador.c: CPU, dispositivos y ciclo de E/S"]
+  gui["main_gui.c: interfaz"] --> motor
+  motor --> teclado["teclado.c: genera vector de teclado"]
+  teclado --> pic["PIC interno de simulador.c"]
+  pic --> isr["ISR interna: atender resultado y EOI"]
+  isr --> retorno["Restaurar contexto del mismo flujo"]
+  retorno --> motor
+  subgraph academicos["Modulos academicos independientes del motor"]
+    cpu["cpu_core.c"]
+    contexto["context_switch.c"]
+    ivt["vector_interruptions.c"]
+  end
 `;
 const { svg } = await mermaid.render('cd-svg', src);
 document.getElementById('cd').innerHTML = svg;

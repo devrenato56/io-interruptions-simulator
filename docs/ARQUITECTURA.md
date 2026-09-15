@@ -22,6 +22,16 @@ una finalización por solicitud; no emula exactamente un 8259A.
 
 ## API y solicitudes
 
+La GUI desactiva `t_demo` al iniciar y reiniciar. Captura caracteres de la
+ventana mediante raylib y los entrega a `sim_teclear(S, caracter)`.
+`sim_leer_disco(S, bloque)` solicita uno de cuatro bloques de contenido fijo.
+Cada solicitud conserva su dato en cola, durante el servicio y hasta la ISR.
+Solo la ISR actualiza el texto atendido o el resultado del disco.
+Se conservan los últimos 32 caracteres atendidos; retroceso elimina el último
+y Enter se representa como `|` en la vista de una línea. La fuente gráfica
+puede no disponer de todos los glifos Unicode, aunque el motor conserva el valor.
+La saturación rechaza explícitamente la entrada y la GUI muestra un aviso.
+
 - `sim_init(S)`: inicializa el estado y activa la demostración automática.
 - `sim_tick(S)`: avanza un ciclo de dispositivos y CPU.
 - `sim_solicitar_es(S, d)`: encola una solicitud; devuelve un ID positivo o
@@ -103,6 +113,12 @@ La prueba prolongada verifica el progreso de la carga de demostración.
 ## Organización e integración
 
 GUI y CLI usan el mismo motor en `src/nucleo/simulador.c`.
+Al finalizar una lectura, el motor llama a `teclado_generar_interrupcion()`
+de `src/fuentes/teclado.c`. El PIC traduce el vector devuelto a su línea de
+teclado y conserva la IRQ aunque esté enmascarada. `VECTOR_TECLADO`, definido
+en `include/teclado.h`, es la referencia común del módulo y la tabla del motor.
+El Makefile enlaza esta fuente en GUI, CLI y pruebas de E/S.
+
 Los módulos académicos `cpu_core.c`, `context_switch.c` y
 `vector_interruptions.c` se mantienen como implementaciones independientes.
 El contexto académico admite un solo marco; el motor necesita una pila para

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "simulador.h"
+#include "teclado.h"
 
 static int fallos;
 static void check(int cond, const char *msg) {
@@ -27,6 +28,33 @@ static void drenar(Simulador *S) {
     for (int i = 0; i < 2000 && !vacio(S); i++) sim_tick(S);
     check(vacio(S), "todas las solicitudes terminan y la CPU sale de ISR");
 }
+static void test_teclado_integrado(void) {
+    Simulador S; init_manual(&S);
+    Interrupcion evento = teclado_generar_interrupcion();
+    check(evento.numero == 0x22 && evento.numero == DEV_VEC[DEV_TECLADO] &&
+          evento.numero != DEV_VEC[DEV_DISCO], "vector de teclado unificado y distinto del disco");
+    S.pic.imr[DEV_TECLADO] = 1;
+    int primera = sim_solicitar_es(&S, DEV_TECLADO);
+    int segunda = sim_solicitar_es(&S, DEV_TECLADO);
+    ticks(&S, DEV_SERV[DEV_TECLADO] - 1);
+    check(!S.pic.irr[DEV_TECLADO] && S.es == 0, "teclado no genera IRQ antes de terminar la lectura");
+    sim_tick(&S);
+    check(S.pic.irr_count[DEV_TECLADO] == 1 &&
+          S.dev[DEV_TECLADO].pendientes[0].id == primera,
+          "lectura terminada entrega al PIC la interrupcion de teclado");
+    ticks(&S, DEV_SERV[DEV_TECLADO]);
+    check(S.pic.irr_count[DEV_TECLADO] == 2 && S.irq == 0 &&
+          !S.pic.irr[DEV_DISCO], "dos lecturas enmascaradas conservan dos IRQ solo de teclado");
+    S.pic.imr[DEV_TECLADO] = 0;
+    sim_tick(&S);
+    check(S.cur_dev == DEV_TECLADO && S.intr_vec == evento.numero,
+          "el vector de teclado llega a la ISR correcta");
+    drenar(&S);
+    check(S.es == 2 && S.eoi == 2 && S.dev[DEV_TECLADO].ultima_atendida == segunda &&
+          !S.dev[DEV_DISCO].completadas && S.ifbit == 1 && S.modo == 0,
+          "ambas lecturas se atienden en orden y retornan al flujo principal");
+}
+
 static void test_sin_es(void) {
     Simulador S; init_manual(&S);
     ticks(&S, 1000);
@@ -174,7 +202,46 @@ static void test_corrida_larga(void) {
               "3000 ciclos: identidad, limites y progreso con todas las variantes");
     }
 }
+static void test_datos_manuales(void) {
+    Simulador S; init_manual(&S);
+    S.pic.imr[DEV_TECLADO]=S.pic.imr[DEV_DISCO]=1;
+    sim_teclear(&S,'A');
+    sim_teclear(&S,0x00f1);
+    sim_leer_disco(&S,2);
+    ticks(&S,40);
+    check(S.n_texto==0 && !S.resultado_disco[0] &&
+          S.dev[DEV_TECLADO].n_pendientes==2 && S.dev[DEV_DISCO].n_pendientes==1,
+          "los datos transferidos no se muestran antes de atender la ISR");
+    S.pic.imr[DEV_TECLADO]=S.pic.imr[DEV_DISCO]=0;
+    drenar(&S);
+    check(S.n_texto==2 && S.texto[0]=='A' && S.texto[1]==0x00f1 &&
+          strcmp(S.resultado_disco,"Bloque 2: LECTURA POR INTERRUPCIONES")==0,
+          "ISR entrega los caracteres originales y el bloque solicitado");
+    sim_teclear(&S,8);
+    sim_teclear(&S,13);
+    drenar(&S);
+    check(S.n_texto==2 && S.texto[0]=='A' && S.texto[1]==13,
+          "retroceso y Enter se procesan a traves de sus ISR");
+    sim_leer_disco(&S,0);
+    sim_leer_disco(&S,3);
+    drenar(&S);
+    check(strcmp(S.resultado_disco,"Bloque 3: FIN DEL ARCHIVO")==0 &&
+          S.dev[DEV_DISCO].completadas==3,
+          "lecturas consecutivas conservan el numero de bloque en la cola");
+    Simulador antes=S;
+    check(sim_teclear(&S,0xd800)==-1 && sim_leer_disco(&S,-1)==-1 &&
+          sim_leer_disco(&S,N_BLOQUES_DISCO)==-1 && !memcmp(&S,&antes,sizeof S),
+          "caracteres y bloques invalidos no modifican el estado");
+    for(int i=0;i<MAX_SOLICITUDES;i++)sim_teclear(&S,'B');
+    check(sim_teclear(&S,'C')==-1,"entrada manual informa saturacion de teclado");
+    drenar(&S);
+    sim_init(&S);
+    check(!S.n_texto && !S.resultado_disco[0],"reinicio limpia los resultados de E/S");
+}
+
 int main(void) {
+    test_datos_manuales();
+    test_teclado_integrado();
     test_sin_es();
     test_fifo_y_mascaras();
     test_if_y_contexto();

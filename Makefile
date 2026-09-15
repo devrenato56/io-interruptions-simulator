@@ -9,7 +9,7 @@
 
 CC      := gcc
 CFLAGS  := -std=c17 -Wall -Wextra -Iinclude -O2
-NUCLEO  := src/nucleo/simulador.c
+NUCLEO  := src/nucleo/simulador.c src/fuentes/teclado.c
 BASE    := src/cpu/cpu_core.c src/contexto/context_switch.c src/ivt/vector_interruptions.c
 HEADERS := $(wildcard include/*.h)
 

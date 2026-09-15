@@ -10,7 +10,7 @@ mediante un número de vector.
 #include "interrupcion.h"
 
 // Número de vector utilizado por el teclado simulado.
-#define VECTOR_TECLADO 1
+#define VECTOR_TECLADO 0x22
 
 // Genera una solicitud de interrupción producida por el teclado.
 Interrupcion teclado_generar_interrupcion(void);

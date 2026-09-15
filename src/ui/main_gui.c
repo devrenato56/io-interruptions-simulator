@@ -10,7 +10,7 @@
  *   - Controles Reproducir/Paso/Reiniciar y toggles anidar/EOI/asíncrona.
  *
  * Lienzo tipo CAD: rueda = zoom al cursor, arrastrar con botón DERECHO = mover,
- * tecla F = ajustar todo a la ventana, tecla R = reiniciar vista. Ventana
+ * boton Ajustar = encuadrar todo. Las letras se envian al teclado simulado. Ventana
  * redimensionable. Cada panel se puede mover (arrastrando su barra de título) y
  * cerrar (X); el botón "Config" los vuelve a mostrar u oculta.
  *
@@ -45,7 +45,7 @@
 #define C_DARKTXT   (Color){ 13, 24, 32,255}
 #define C_WIRE      (Color){ 49, 72, 92,255}
 
-#define HEADER_H 94
+#define HEADER_H 174
 #define WORLD_W  1360.0f
 #define WORLD_H  862.0f
 
@@ -94,6 +94,22 @@ static int toggle(Rectangle r,const char*txt,int on){
     if(on)DrawText("x",(int)b.x+3,(int)b.y+1,12,C_DARKTXT);
     DrawText(txt,(int)r.x+28,(int)r.y+r.height/2-6,12,C_MUTED);
     return hover&&IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+
+static void texto_atendido(const Simulador *S, char out[160]){
+    int w=0;
+    for(int i=0;i<S->n_texto;i++){
+        int bytes=0;
+        const char *c=CodepointToUTF8(S->texto[i]==13?'|':S->texto[i],&bytes);
+        memcpy(out+w,c,(size_t)bytes); w+=bytes;
+    }
+    out[w]=0;
+    /* Mantiene visible el extremo reciente sin cortar un caracter UTF-8. */
+    while(MeasureText(out,14)>450){
+        int n=1;
+        while(((unsigned char)out[n]&0xc0)==0x80)n++;
+        memmove(out,out+n,strlen(out+n)+1);
+    }
 }
 
 /* ------------------------- paneles ------------------------- */
@@ -317,23 +333,38 @@ int main(void){
     SetWindowMinSize(1060,600);
     SetTextureFilter(GetFontDefault().texture,TEXTURE_FILTER_BILINEAR);
     SetTargetFPS(60);
-    Simulador S; sim_init(&S); scope_sample(&S);
+    Simulador S; sim_init(&S); S.t_demo=0; scope_sample(&S);
     for(int i=0;i<NP;i++){poff[i]=(Vector2){0,0};pvis[i]=1;}
     Camera2D cam={0}; cam.zoom=1;
     int fit_pending=1;                 /* ajustar la vista en el primer frame */
     int reproduciendo=0; float acc=0; int vel=5, drag_vel=0;
     int dragging=-1; int show_config=0;
+    int capturar_teclado=1, bloque=0;
+    const char *error_es=NULL;
 
 #ifdef HEADLESS_CAPTURE
+    sim_teclear(&S,'A');
+    sim_leer_disco(&S,2);
     for(int k=0;k<40;k++){sim_tick(&S);scope_sample(&S);}
 #endif
 
     while(!WindowShouldClose()){
         float dt=GetFrameTime();
+        int caracter;
+        while((caracter=GetCharPressed())!=0){
+            if(capturar_teclado && IsWindowFocused()){
+                error_es=sim_teclear(&S,caracter)<0?"Teclado: entrada rechazada (cola llena o caracter invalido)":NULL;
+            }
+        }
+        if(capturar_teclado && IsWindowFocused()){
+            int especial=IsKeyPressed(KEY_BACKSPACE)?8:
+                (IsKeyPressed(KEY_ENTER)||IsKeyPressed(KEY_KP_ENTER))?13:0;
+            if(especial)error_es=sim_teclear(&S,especial)<0?"Teclado: cola llena":NULL;
+        }
         if(reproduciendo){ acc+=dt; float iv=0.62f-(vel-1)*0.06f; while(acc>=iv){acc-=iv;sim_tick(&S);scope_sample(&S);} }
 
-        /* ---- ajustar vista (F/R o inicio) ---- */
-        int fitnow=fit_pending||IsKeyPressed(KEY_F)||IsKeyPressed(KEY_R);
+        /* ---- ajustar vista (boton o inicio) ---- */
+        int fitnow=fit_pending;
         if(fitnow){ float aw=GetScreenWidth()-16, ah=GetScreenHeight()-HEADER_H-12;
             float z=fminf(aw/WORLD_W,ah/WORLD_H); if(z<0.1f)z=0.1f;
             cam.zoom=z; cam.offset=(Vector2){8,HEADER_H+6}; cam.target=(Vector2){0,0}; fit_pending=0; }
@@ -401,11 +432,24 @@ int main(void){
         Rectangle bPlay={12,52,116,32},bStep={134,52,80,32},bReset={220,52,96,32};
         if(boton(bPlay,reproduciendo?"|| Pausa":"> Reproducir",reproduciendo))reproduciendo=!reproduciendo;
         if(boton(bStep,">| Paso",0)){reproduciendo=0;sim_tick(&S);scope_sample(&S);}
-        if(boton(bReset,"<< Reiniciar",0)){sim_init(&S);sig_len=0;prev_eoi=0;scope_sample(&S);reproduciendo=0;}
+        if(boton(bReset,"<< Reiniciar",0)){sim_init(&S);S.t_demo=0;sig_len=0;prev_eoi=0;scope_sample(&S);reproduciendo=0;acc=0;error_es=NULL;}
         Rectangle tAn={328,52,86,32},tEo={420,52,126,32},tAs={552,52,126,32};
         if(toggle(tAn,"anidar",S.t_anidar))S.t_anidar=!S.t_anidar;
         if(toggle(tEo,"EOI temprano",S.t_eoi_temprano))S.t_eoi_temprano=!S.t_eoi_temprano;
         if(toggle(tAs,"E/S asincrona",S.t_asincrono))S.t_asincrono=!S.t_asincrono;
+        if(toggle((Rectangle){12,96,180,32},"Capturar teclado",capturar_teclado))
+            capturar_teclado=!capturar_teclado;
+        DrawText(TextFormat("Bloque %d",bloque),212,106,14,C_INK);
+        if(boton((Rectangle){302,96,32,32},"-",0) && bloque>0)bloque--;
+        if(boton((Rectangle){340,96,32,32},"+",0) && bloque<N_BLOQUES_DISCO-1)bloque++;
+        if(boton((Rectangle){384,96,132,32},"Leer disco",0))
+            error_es=sim_leer_disco(&S,bloque)<0?"Disco: cola llena":NULL;
+        if(error_es)DrawText(error_es,530,106,12,C_DANGER);
+        char atendido[160]; texto_atendido(&S,atendido);
+        DrawText("Teclado / ISR",12,134,10,C_GOOD);
+        DrawText(atendido[0]?atendido:"-",12,150,14,C_INK);
+        DrawText("Disco / ISR",530,134,10,C_ACCENT);
+        DrawText(S.resultado_disco[0]?S.resultado_disco:"-",530,150,14,C_INK);
         /* velocidad */
         float sx=GetScreenWidth()-330; Rectangle sl={sx,26,110,8};
         DrawText("Vel",(int)sx,10,11,C_MUTED);
