@@ -1,6 +1,13 @@
 # Plan de trabajo
 
-Este plan organiza el desarrollo de un simulador dedicado únicamente a interrupciones de entrada/salida (E/S). Las fases 1 y 2 son las únicas avanzadas actualmente.
+Este plan organiza el desarrollo por fases de un simulador dedicado únicamente
+a interrupciones de entrada/salida (E/S). Las fases 1 y 2 son las avanzadas en
+esta línea de trabajo. El motor independiente de `src/nucleo/` implementa E/S
+para disco y teclado; unificarlo con estos módulos sigue pendiente.
+
+El alcance vigente permite múltiples dispositivos de E/S, prioridades,
+máscaras, colas y anidamiento. Se conserva el mismo flujo de CPU al retornar
+de la ISR.
 
 ## Resumen de fases
 
@@ -52,7 +59,8 @@ Este plan organiza el desarrollo de un simulador dedicado únicamente a interrup
 ### Fase 6 - Controlador de E/S
 
 - Entregable: recibir la solicitud del teclado, marcarla como pendiente, entregarla al CPU y limpiarla al recibir el reconocimiento.
-- Al existir un único dispositivo, no incluye prioridades, máscaras, arbitraje ni scheduler.
+- El caso mínimo utiliza teclado; al incorporar disco se permiten prioridades,
+  máscaras y arbitraje entre fuentes de E/S. No incluye scheduler.
 - Depende de las fases 1, 2 y 5.
 
 ### Fase 7 - Integración y pruebas
@@ -78,7 +86,6 @@ Fase 1 ──> Fase 2 ───────────────────�
 - Interrupciones de software y llamadas al sistema.
 - Excepciones del CPU.
 - Scheduler, quantum y cambio entre procesos.
-- Arbitraje entre múltiples fuentes, prioridades y máscaras.
 
 ## Convenciones asociadas
 
