@@ -1,61 +1,61 @@
 # Simulador de interrupciones de E/S
 
-Simulador educativo en C del recorrido de una interrupción producida por un dispositivo de entrada/salida: solicitud del dispositivo, controlador simple, atención del CPU, guardado de estado, consulta de la IVT, ejecución de la ISR y retorno.
+Simulador educativo en C17 de un flujo de CPU interrumpido por disco y teclado.
+Conserva prioridades, máscaras, colas de solicitudes, vectores, ISR anidadas,
+EOI y restauración del contexto. Solo las transferencias de E/S generan IRQ.
 
-El proyecto no incluye interrupciones de software, temporizador, excepciones ni planificación de procesos. Actualmente solo se consideran avanzadas las fases 1 y 2: arquitectura base y CPU Core.
+No incluye temporizador de interrupciones, quantum, planificación ni cambio
+entre procesos. Los ciclos de simulación y los tiempos de servicio permiten
+observar la E/S; no son fuentes independientes de interrupciones.
 
-## Tecnología
+## Compilar y ejecutar
 
-| Componente | Herramienta |
-|---|---|
-| Lenguaje | C17 |
-| Compilador | GCC / MinGW-w64 UCRT64 |
-| Build system | GNU Make |
-| Control de versiones | Git + GitHub |
+El núcleo y las pruebas requieren GCC y GNU Make. La interfaz gráfica requiere
+además **raylib**. No se accede al hardware real.
 
-No se utilizan frameworks ni dependencias externas. La simulación se ejecuta en consola y no interactúa con hardware real.
-
-## Estructura actual
-
-```text
-io-interruptions-simulator/
-|-- include/
-|   |-- contexto.h
-|   |-- cpu.h
-|   |-- interrupcion.h
-|   `-- registro.h
-|-- src/
-|   |-- contexto/context_switch.c
-|   |-- controlador/pic.c
-|   |-- cpu/cpu_core.c
-|   |-- fuentes/teclado.c
-|   |-- ivt/vector_interruptions.c
-|   `-- main.c
-|-- tests/test_integration.c
-|-- docs/
-|-- Makefile
-`-- README.md
+```bash
+make test
+make cli
+./simulador --ciclos 400 --anidar --salida trace.csv
+make gui
+./simulador_gui
 ```
 
-Los módulos de fases posteriores pueden existir como archivos preliminares, pero no se consideran implementados hasta completar su fase y sus pruebas.
-
-## Compilar la prueba disponible
-
-Desde la raíz del proyecto:
+`make` compila la GUI por defecto. En Windows los ejecutables llevan
+`.exe`. Para compilar sin Make desde PowerShell:
 
 ```powershell
-gcc -std=c17 -Wall -Wextra -Iinclude tests/test_integration.c src/cpu/cpu_core.c -o test_cpu.exe
-.\test_cpu.exe
+gcc -std=c17 -Wall -Wextra -Iinclude tests/test_interrupciones.c src/nucleo/simulador.c -o test_interrupciones.exe
+.\test_interrupciones.exe
+gcc -std=c17 -Wall -Wextra -Iinclude src/nucleo/main_sim.c src/nucleo/simulador.c -o simulador.exe
+.\simulador.exe --ciclos 400 --anidar --salida trace.csv
 ```
 
-La prueba actual valida inicialización, NOP, suma, salto y detención del CPU.
+## Organización
+
+| Ruta | Responsabilidad |
+|---|---|
+| `include/config_sim.h` | Dispositivos, vectores, prioridades y capacidad de solicitudes |
+| `include/simulador.h` | Estado y API del motor |
+| `src/nucleo/simulador.c` | Flujo de CPU, solicitudes, dispositivos, PIC y atención de E/S |
+| `src/nucleo/main_sim.c` | Consola y traza CSV |
+| `src/ui/main_gui.c` | Interfaz raylib, osciloscopio, bitácora y métricas |
+| `tests/test_interrupciones.c` | Regresiones del motor de E/S |
+| `src/cpu/`, `src/contexto/`, `src/ivt/` | Módulos de las fases académicas, independientes del motor |
+| `tests/test_integration.c` | Prueba del CPU Core |
+| `src/controlador/pic.c`, `src/fuentes/teclado.c`, `src/main.c` | Archivos preliminares de la integración por fases |
+
+Los módulos académicos de CPU, contexto e IVT se conservan por pertenecer a E/S.
+`make test` también los compila y ejecuta la prueba de CPU Core. Su conexión
+con el motor de `src/nucleo/` sigue siendo trabajo de integración separado.
 
 ## Documentación
 
-- [Contexto y flujo](docs/CONTEXT.md)
-- [Plan de trabajo](docs/WORKPLAN.md)
+- [Manual](docs/MANUAL.md)
+- [Arquitectura del motor](docs/ARQUITECTURA.md)
+- [Contexto y alcance](docs/CONTEXT.md)
+- [Plan por fases](docs/WORKPLAN.md)
 - [Documentación del CPU Core](docs/cpu_core/CPU_CORE_DOCUMENTACION.md)
-- [Plan de la Fase 2](docs/cpu_core/CPU_CORE_WORKPLAN.md)
 - [Preparación del entorno](docs/IMPORTANT.md)
 
 ## Licencia

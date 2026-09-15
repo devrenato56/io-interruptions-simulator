@@ -2,9 +2,14 @@
 
 ## Alcance obligatorio
 
-El proyecto simula únicamente una interrupción producida por un dispositivo de entrada/salida. No se deben añadir interrupciones de software, temporizador, excepciones, scheduler ni cambio entre procesos.
+El proyecto simula únicamente interrupciones producidas por disco y teclado.
+Se admiten prioridades, máscaras, colas y anidamiento de E/S.
+No se deben añadir interrupciones de software, temporizador, excepciones,
+scheduler ni cambio entre procesos.
 
-Actualmente solo se consideran avanzadas la Fase 1, correspondiente a las estructuras e interfaces base, y la Fase 2, correspondiente al CPU Core.
+En la línea por fases están avanzadas la Fase 1 (contratos) y la Fase 2 (CPU
+Core). La demostración de E/S funciona en el motor independiente de
+`src/nucleo/`; consulta `MANUAL.md` para compilar la consola y la GUI con raylib.
 
 ## Compilador GCC
 
@@ -51,4 +56,5 @@ gcc -std=c17 -Wall -Wextra -Iinclude tests/test_integration.c src/cpu/cpu_core.c
 .\test_cpu.exe
 ```
 
-La prueba actual valida el ciclo básico del CPU. La demostración completa de E/S se añadirá cuando estén implementadas las fases posteriores.
+Esta prueba valida el ciclo básico del CPU. `make test` ejecuta además
+`tests/test_interrupciones.c`, que verifica el motor completo de E/S.

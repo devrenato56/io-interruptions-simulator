@@ -23,12 +23,17 @@ La interrupción se comprueba entre instrucciones. De este modo, el estado guard
 
 ## Estado actual
 
-Solo se consideran avanzadas las fases 1 y 2:
+En el desarrollo por fases se consideran avanzadas las fases 1 y 2:
 
 - Fase 1: contratos base para `CPU`, `Registro`, `Interrupcion` y `Contexto`.
 - Fase 2: ciclo básico del CPU y punto temporal de consulta de una E/S pendiente.
 
 Los archivos presentes de fases posteriores no se consideran implementaciones terminadas hasta que su fase correspondiente sea desarrollada y probada.
+
+El motor de `src/nucleo/` implementa por separado el flujo completo de E/S
+para disco y teclado, con GUI y consola. Se permiten prioridades, máscaras,
+colas y anidamiento por pertenecer a la atención de E/S. No incluye timer ni
+planificación; su unificación con los módulos por fases sigue pendiente.
 
 ## Plan de trabajo
 
@@ -69,7 +74,9 @@ Los archivos presentes de fases posteriores no se consideran implementaciones te
 8. El CPU restaura su estado y continúa la ejecución normal.
 ```
 
-Como se simula un único dispositivo, el controlador no necesita prioridades, máscaras ni planificación. El número de vector basta para identificar la fuente y localizar su manejador.
+El teclado es el caso mínimo del desarrollo por fases. El motor incluye además
+disco y conserva prioridades, máscaras y arbitraje entre ambas fuentes de E/S.
+El número de vector identifica el dispositivo y su manejador.
 
 ## Convenciones de trabajo
 

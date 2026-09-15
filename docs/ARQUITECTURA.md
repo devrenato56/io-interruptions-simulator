@@ -1,187 +1,109 @@
-# Arquitectura y documentación técnica
+# Arquitectura del simulador de E/S
 
-Documento para desarrolladores del equipo: cómo está organizado el código, cómo
-funciona el motor, qué correcciones se hicieron y cómo probar/extender.
+## Modelo
 
-> Para **instalar, compilar y usar**, ver [`MANUAL.md`](MANUAL.md).
+Un único flujo de CPU envía solicitudes de lectura a **Disco** y **Teclado**.
+Cada dispositivo conserva una cola FIFO de solicitudes y otra de transferencias
+finalizadas que esperan atención de su ISR. Una solicitud tiene un ID, no un
+estado de proceso.
 
----
+Se mantienen el PIC con IRR/IMR/ISR, prioridades fijas, máscaras, conteo de IRQ,
+vectores, anidamiento con STI, EOI temprano y contexto del flujo interrumpido.
+No existen temporizador de interrupciones, quantum ni planificación de procesos.
 
-## 1. Estructura del repositorio (aporte de esta rama)
+| Dispositivo | Índice | Prioridad | Vector | Servicio |
+|---|---|---|---|---|
+| Disco | 0 | 0 (mayor) | 0x21 | 6 pasos |
+| Teclado | 1 | 1 | 0x22 | 4 pasos |
 
-```
-include/
-  config_sim.h      Parámetros del modelo: dispositivos, prioridades, vectores, quantum.
-  simulador.h       Estado completo (struct Simulador) y API pública del motor.
-src/
-  nucleo/
-    simulador.c     EL MOTOR: raise/arbitraje del PIC, contexto, tick() del ciclo.
-    main_sim.c      Modo consola/traza (CLI, escribe trace.csv).
-  ui/
-    main_gui.c      Interfaz gráfica interactiva con raylib.
-tests/
-  test_interrupciones.c   Pruebas de invariantes teóricos.
-docs/
-  MANUAL.md         Manual de usuario.
-  ARQUITECTURA.md   Este documento.
-  NUCLEO_WEB.md     Resumen del port y correcciones.
-Makefile            Targets: gui (por defecto), cli, test, run, clean.
-```
+Los vectores y prioridades son convenciones didácticas, no un mapeo de hardware
+PC real. El PIC incorpora conteo de eventos como simplificación para conservar
+una finalización por solicitud; no emula exactamente un 8259A.
 
-El **motor** (`simulador.c`) no depende de la interfaz. Tanto la GUI (raylib)
-como el modo consola llaman a las **mismas** funciones `sim_init()` y
-`sim_tick()`. Eso garantiza que lo que se ve en pantalla y lo que se prueba es
-exactamente la misma lógica.
+## API y solicitudes
 
----
+- `sim_init(S)`: inicializa el estado y activa la demostración automática.
+- `sim_tick(S)`: avanza un ciclo de dispositivos y CPU.
+- `sim_solicitar_es(S, d)`: encola una solicitud; devuelve un ID positivo o
+  `-1` si el dispositivo no existe o alcanzó su capacidad.
+- `sim_mascara(reg, out)`: representa los bits en orden Disco, Teclado.
 
-## 2. El modelo teórico
+`t_demo=0` permite generar solicitudes explícitas para pruebas. La demostración
+envía una solicitud cada tres instrucciones del mismo flujo, alternando los
+dispositivos. Si la cola está llena, reintenta en la siguiente instrucción.
+No introduce otra fuente de IRQ.
 
-Se simula el ciclo de E/S dirigida por interrupciones con:
+`MAX_SOLICITUDES` limita el total por dispositivo: en cola, en transferencia
+y finalizadas pendientes de ISR. Rechazar una solicitud no altera el estado.
+Cada transferencia genera una IRQ y cada ISR retira una sola finalización FIFO.
 
-- **CPU** con tres procesos y planificación por **cola de listos**. Cada proceso
-  alterna ráfagas de CPU y operaciones de E/S según un *plan* fijo.
-- **PIC 8259A simplificado**, con tres registros de un bit por dispositivo:
-  - **IRR** (*Interrupt Request Register*): líneas pendientes.
-  - **IMR** (*Interrupt Mask Register*): líneas enmascaradas.
-  - **ISR** (*In-Service Register*): interrupciones en atención.
-  - **Prioridad fija**: menor número = mayor prioridad
-    (`Timer=0 > Disco=1 > Teclado=2`).
-- **IVT** (tabla de vectores): cada dispositivo tiene su vector (`0x20..0x22`) y
-  su rutina `isr_<dev>()`.
-- **Contexto**: se guarda/restaura PC, registros, flags y **modo**
-  (usuario/kernel) en una pila, lo que permite el **anidamiento**.
-- **Timer** (quantum): fuente de mayor prioridad que provoca el cambio de proceso
-  (planificación). No forma parte de la Figura 1.4.
-- **Dispositivos** (Disco, Teclado) con **reloj propio** para modelar la E/S
-  **asíncrona**.
+## Tiempo y CPU
 
-Configuración en `config_sim.h`:
+Cada tick avanza los dispositivos incluso si la CPU está atendiendo una ISR.
+Con `t_asincrono=1`, el servicio avanza cada dos ticks de su reloj local;
+con `0`, cada tick. Estos contadores solo modelan la duración de una E/S.
+Un dispositivo inactivo no genera interrupciones por el paso del tiempo.
 
-```c
-DEV_PRIO = { 0, 1, 2 };        // Timer, Disco, Teclado
-DEV_VEC  = { 0x20, 0x21, 0x22 };
-DEV_SERV = { 0, 6, 4 };        // ciclos de servicio (Timer no se sirve por E/S)
-QUANTUM  = 4;
-```
+Fuera de ISR, la CPU completa una instrucción ilustrativa (PC y R0 avanzan)
+y consulta el PIC. La IRQ debe tener al menos un ciclo de antigüedad,
+estar desenmascarada y encontrar IF habilitado.
 
----
+## Entrada y retorno de ISR
 
-## 3. El estado: `struct Simulador`
+1. Se acepta la IRQ y se captura atómicamente PC, R0, EFLAGS, IF y modo,
+   antes de limpiar IF. Se descuenta una IRQ del IRR.
+2. La animación muestra INTA.
+3. Se muestra el contexto preservado en la entrada.
+4. Se usa el vector del dispositivo para representar la dirección del handler.
+   Si está habilitado el anidamiento, STI activa IF.
+5. Se emite EOI si está activa la variante temprana.
+6. Se atiende una finalización de E/S y se emite EOI si aún falta.
+7. IRET restaura el contexto del mismo flujo.
 
-Definido en `include/simulador.h`. Campos principales:
+La dirección de ISR y su despacho son representaciones internas del motor;
+no se ejecutan instrucciones de hardware ni se usa la IVT del módulo académico.
+La captura se hace al aceptar la IRQ para no guardar un IF ya modificado;
+la etapa 3 la hace visible en la interfaz.
 
-- **CPU**: `cpu` (proceso en ejecución o −1), `modo`, `pc`, `r0`, `eflags`,
-  `ifbit`.
-- **Cola de listos**: `ready[]`, `n_ready`.
-- **Procesos**: `proc[3]` con `{fase, restante, estado, dispositivo, pendiente}`.
-- **Dispositivos**: `dev[]` con `{sirviendo, restante, reloj, cola[]}`.
-- **PIC**: `pic.{irr, imr, isr, irr_count, pila_isr, en_servicio}`.
-- **Ciclo de interrupción**: `in_isr`, `stage` (1..7), `cur_dev`, `intr_*`,
-  `pila_ctx[]` (contextos), `pila_nest[]` (ISR externos preemptados).
-- **Métricas**: `irq, ctx, busy, es, lat_sum, nest, eoi`.
-- **Bitácora**: `logtxt[]/logtag[]/logt[]` (para la GUI).
-- **Toggles**: `t_anidar, t_eoi_temprano, t_asincrono`.
+El anidamiento admite únicamente una prioridad estrictamente mayor que la ISR
+activa. Esta política se conserva incluso después de EOI temprano. La pila de
+progreso retiene etapa, dispositivo, vector, prioridad y estado del EOI externo.
+Al terminar la ISR interna se restaura la externa y después el flujo principal.
+El límite de profundidad deriva del número de dispositivos y prioridades.
 
----
+## Métricas y traza
 
-## 4. El ciclo: `sim_tick()`
+`contextos_guardados` cuenta entradas a ISR. `busy` cuenta instrucciones del
+flujo principal; su porcentaje indica cuánto tiempo pudo avanzar dicho flujo.
+`es` cuenta resultados atendidos por ISR, no solo transferencias terminadas.
+`lat_sum` acumula el tiempo desde cada finalización hasta aceptar su IRQ.
 
-Cada llamada avanza **un ciclo** discreto. Estructura:
+El CSV contiene registros del PIC, modo/PC/IF, etapa y vector, solicitudes en
+servicio, tiempos restantes, colas, finalizaciones pendientes y métricas.
+No contiene columnas de procesos ni planificación. El formato cambia respecto
+de la versión anterior y los consumidores deben usar los nuevos encabezados.
 
-**Si hay un ISR en curso (`in_isr`):**
-1. Comprueba **anidamiento**: si `anidar` está activo, `IF=1` (hubo `STI`) y hay
-   una IRQ de mayor prioridad madura, **preempta**: guarda el ISR externo en
-   `pila_nest`, empieza el interno.
-2. Avanza la etapa `stage` (1→7). En cada etapa ocurre lo real:
-   - etapa 2: **INTA**.
-   - etapa 3: **guardar contexto** (`ctx_guardar`).
-   - etapa 4: consultar **IVT** (vector al bus) y, si `anidar`, **STI** (`IF=1`).
-   - etapa 5: **EOI temprano** (si el toggle está activo).
-   - etapa 6: **aplicar efecto** (liberar el proceso) + **EOI**.
-   - etapa 7: **restaurar contexto** (IRET).
-3. Al terminar (etapa >7): si había un ISR externo preemptado, lo **reanuda**;
-   si no, sale del ISR.
+## Pruebas
 
-**Si no hay ISR (flujo normal):**
-1. **Timer**: descuenta el quantum; al llegar a 0, alza IRQ del Timer.
-2. **Planificación**: la CPU toma un proceso listo.
-3. **Ejecución**: corre una instrucción; al terminar su ráfaga, si toca E/S
-   lanza el **driver**, **bloquea** el proceso y lo encola en el dispositivo.
-4. **Dispositivos**: avanzan su servicio con **reloj propio**; al terminar,
-   marcan `pendiente` y **alzan IRQ**.
-5. **Arbitraje del PIC**: elige la IRQ de mayor prioridad **madura** y no
-   enmascarada, y entra al ISR.
-6. **Driver**: cuenta atrás y se libera.
-7. **Comprobación de integridad**: ningún proceso queda bloqueado sin causa.
+`make test` ejecuta la suite de E/S y CPU Core. Las pruebas del motor cubren:
 
-Funciones clave: `pic_alzar`, `pic_arbitrar`, `pic_consumir`, `pic_eoi`,
-`ctx_guardar`, `ctx_restaurar`, `aplicar_efecto`.
+- Ausencia de IRQ cuando no hay E/S.
+- Una finalización atendida por ISR, identidad y FIFO.
+- Conservación de múltiples IRQ con IMR y con IF deshabilitado.
+- Prioridad, vectores y latencia desde la finalización.
+- Restauración exacta del contexto y reanudación de instrucciones.
+- Avance de dispositivos durante ISR y anidamiento con/sin EOI temprano.
+- Capacidad de las colas, entradas inválidas y recuperación de capacidad.
+- 3000 ciclos para cada combinación de las tres variantes, seguidos por el
+  vaciado de solicitudes; se comprueba conservación y progreso de ambos dispositivos.
 
----
+Las prioridades fijas no garantizan equidad bajo una carga arbitraria.
+La prueba prolongada verifica el progreso de la carga de demostración.
 
-## 5. Correcciones incorporadas (respecto a versiones previas)
+## Organización e integración
 
-Estas correcciones vienen validadas del prototipo web y están **desde el inicio**
-en el motor en C:
-
-1. **Conteo de IRQs por dispositivo** (`irr_count`): no se pierden solicitudes
-   repetidas del mismo dispositivo.
-2. **Una IRQ libera exactamente un proceso** (no todos los que esperan).
-3–5. El **flujo** y el badge siguen el trabajo real; el ISR del **Timer** se
-   distingue de una E/S.
-6. El **arbitraje espera ≥1 ciclo** tras alzar la IRQ (maduración).
-7. **Reloj propio del dispositivo** para la E/S asíncrona.
-8. **Restauración correcta del modo** usuario/kernel.
-9. **Anidamiento real** con `STI` (antes era imposible: el ciclo retornaba antes
-   de poder anidar).
-14. El **driver se libera** al terminar su trabajo.
-15. **Comprobación de integridad** de procesos bloqueados.
-
-> Además, durante el port se detectó y corrigió un bug propio: al anidar no se
-> guardaba/restauraba el estado del **EOI** del ISR externo, lo que dejaba el
-> `en_servicio` "pegado" y estancaba la simulación. Se resolvió guardando todo el
-> estado de la interrupción en el marco de anidamiento.
-
----
-
-## 6. Pruebas
-
-```bash
-make test
-```
-
-`tests/test_interrupciones.c` verifica los invariantes teóricos:
-
-1. **Una** IRQ de un dispositivo con varios procesos en espera libera **uno solo**.
-2. **Dos** IRQs del mismo dispositivo liberan **dos** procesos (no se pierde la
-   segunda).
-3. En **3000 ciclos** ningún proceso queda bloqueado sin dispositivo ni sufre
-   **inanición** (cada proceso se libera decenas de veces).
-4. Con **anidar** activo ocurren **preempciones reales** (el contador de
-   anidamientos crece).
-
-Resultado esperado: `TODAS LAS PRUEBAS PASARON.`
-
----
-
-## 7. Cómo extender
-
-- **Agregar un dispositivo**: en `config_sim.h` sube `N_DISPOS`, añade su nombre,
-  prioridad, vector y tiempo de servicio; en `simulador.c` inclúyelo en el lazo
-  de dispositivos y en los planes de proceso.
-- **Cambiar tiempos**: ajusta `DEV_SERV`, `QUANTUM` o los planes `PLAN[][]` en
-  `simulador.c`.
-- **Nuevos datos en la traza**: añade columnas en `main_sim.c`
-  (`escribir_cabecera` / `escribir_fila`).
-- **Nueva vista en la GUI**: añade un panel al arreglo de `main_gui.c` (base,
-  nombre, visibilidad) y su función de dibujo.
-
----
-
-## 8. Nota de alcance
-
-Este subsistema **excede** el alcance acordado en `WORKPLAN.md`
-(un dispositivo, sin timer, prioridades, máscaras, anidamiento ni scheduler).
-Por eso vive en la rama `feature/simulador-nucleo` y **no** se ha integrado a
-`main`. Su incorporación debe acordarse con el equipo mediante Pull Request.
+GUI y CLI usan el mismo motor en `src/nucleo/simulador.c`.
+Los módulos académicos `cpu_core.c`, `context_switch.c` y
+`vector_interruptions.c` se mantienen como implementaciones independientes.
+El contexto académico admite un solo marco; el motor necesita una pila para
+las ISR anidadas. Unificar esas APIs no forma parte de esta limpieza de alcance.

@@ -4,7 +4,7 @@
 > Explica qué es, cómo instalarlo, cómo compilarlo, cómo usarlo y **qué está
 > ocurriendo** en pantalla (la teoría detrás).
 
-![Interfaz del simulador](img/captura_gui.png)
+![Interfaz de E/S con disco y teclado](img/captura_gui.png)
 
 ---
 
@@ -127,13 +127,13 @@ Opciones: `--ciclos N`, `--anidar`, `--eoi-temprano`, `--sincrono`,
 
 - **Escena del hardware** — la CPU (con su **driver** encima), el **PIC**
   (registros IRR/IMR/ISR, líneas de IRQ), los **controladores/dispositivos**
-  (Timer, Teclado, Disco) con su barra de progreso, la **cola de listos** y los
-  **procesos** (P1, P2, P3) que se mueven según su estado. Las líneas entre
+  (Teclado y Disco) con su barra de progreso y las **solicitudes de E/S**
+  identificadas por número, en cola o esperando ISR. Las líneas entre
   bloques son los **buses** (con flechas que indican el sentido).
-- **Osciloscopio** — las señales en el tiempo: **CLK** (reloj), **IRQ**
+- **Osciloscopio** — las señales en el tiempo: **CLK** (ciclos de simulación), **IRQ**
   (petición de interrupción), **INTA** (reconocimiento de la CPU), **EOI** (fin
   de interrupción) y **DATA[7:0]** (el vector que viaja por el bus).
-- **Flujo del ciclo E/S (Fig. 1.4)** — los 7 nodos de la figura del libro; el
+- **Flujo del ciclo E/S (Fig. 1.4)** — la representación del ciclo; el
   nodo activo se **ilumina** y abajo aparece "PASO X / 7".
 - **Bitácora de eventos** — el registro de lo que va pasando (SYS/IRQ/DRV).
 - **Tabla de vectores (IVT)** — vector, fuente, prioridad e ISR de cada
@@ -161,14 +161,14 @@ Opciones: `--ciclos N`, `--anidar`, `--eoi-temprano`, `--sincrono`,
 El ciclo que ves es exactamente el de la Figura 1.4. Con el botón **Paso** puedes
 recorrerlo. Los pasos y lo que se ve en pantalla:
 
-1. **El driver inicia la E/S.** Un proceso necesita leer (p. ej. del Disco). El
+1. **El driver inicia la E/S.** El flujo principal solicita leer (p. ej. del Disco). El
    *device driver* traduce la petición a órdenes para el controlador. En la
    escena, la tarjeta **DRIVER** se enciende sobre la CPU; en el flujo se
    ilumina el nodo 1.
-2. **La CPU ordena la E/S al controlador** (*initiates I/O*). El proceso pasa a
-   **bloqueado** y su pill se mueve al dispositivo. Nodo 2.
+2. **La CPU ordena la E/S al controlador** (*initiates I/O*). La solicitud se
+   encola en el dispositivo y conserva su identificador hasta atenderse.
 3. **El controlador ejecuta la E/S en paralelo.** La barra del dispositivo
-   avanza mientras la CPU sigue con otros procesos. Nodo 3. (Con **E/S
+   avanza mientras la CPU continúa el mismo flujo o atiende una ISR. (Con **E/S
    asíncrona** el dispositivo avanza a su propio ritmo.)
 4. **El controlador termina y genera una IRQ.** El **PIC** marca el bit en su
    registro **IRR**; en el osciloscopio sube la línea **IRQ**. Nodo 4.
@@ -176,18 +176,18 @@ recorrerlo. Los pasos y lo que se ve en pantalla:
    el **contexto** (PC, registros, flags), consulta la **IVT** para hallar la
    rutina (el **vector** aparece en **DATA**) y salta al **handler (ISR)**.
    Nodo 5. La CPU pasa a **modo kernel** (LED ámbar).
-6. **El handler procesa, emite EOI y retorna (IRET).** El proceso que esperaba
-   vuelve a **listo**; el PIC recibe el **EOI**. Nodo 6.
+6. **El handler procesa, emite EOI y retorna (IRET).** Se atiende el resultado
+   de una solicitud; el PIC recibe el **EOI**.
 7. **La CPU reanuda** la tarea interrumpida justo donde estaba. Vuelve el nodo 1
    (flecha de realimentación "7 · IRET").
 
-El **Timer** (quantum) es una fuente de interrupción aparte, de máxima
-prioridad: provoca el cambio de proceso en la CPU (planificación). No forma
-parte de la Figura 1.4, por eso no ilumina sus nodos.
+Solo la finalización de E/S genera IRQ. El reloj de los dispositivos representa
+su tiempo de servicio; CLK permite observar los ciclos de la simulación.
+No hay temporizador de interrupciones ni planificación entre procesos.
 
 ### Métricas que verás moverse
 
-- **IRQ atendidas**, **E/S completadas**, **cambios de contexto**, **uso de
+- **IRQ atendidas**, **E/S completadas**, **contextos guardados para ISR**, **uso de
   CPU**, **latencia IRQ→ISR**, **anidamientos**, **EOI emitidos**, **IRR
   pendientes**.
 
@@ -201,8 +201,9 @@ parte de la Figura 1.4, por eso no ilumina sus nodos.
   **anidamientos**.
 - **EOI temprano** — cambia el **momento** en que se envía el fin de interrupción
   (antes o después de procesar el ISR).
-- **E/S asíncrona** — alterna el **modelo de tiempo** del dispositivo: reloj
-  propio (asíncrono) frente a sincronizado con la CPU.
+- **E/S asíncrona** — alterna el **modelo de tiempo** del dispositivo: un paso
+  de servicio cada dos ciclos, o uno por ciclo. Los dispositivos avanzan también
+  durante las ISR en ambos modos.
 
 Sugerencia para la exposición: activa **anidar**, pon **Vel** al medio y observa
 en la bitácora los mensajes `[ANIDADA]` y `ISR hace STI`.
@@ -221,9 +222,9 @@ make cli
 Imprime una bitácora como:
 
 ```
-t3  [DRV] Paso 1 — driver inicia E/S (read) para P1 en Disco.
-t3  [DRV] Paso 2 — CPU → Disco controller: initiates I/O.
-t4  [IRQ] Timer: quantum agotado → IRQ.
+t3  [DRV] Driver -> Teclado: inicia E/S #1.
+t6  [DRV] Driver -> Disco: inicia E/S #2.
+t11 [IRQ] Teclado: transferencia #1 completa -> IRQ.
 ...
 == Resumen ==  ciclos, IRQ atendidas, E/S completadas, uso de CPU, ...
 ```
@@ -246,8 +247,7 @@ Y con `--salida trace.csv` genera un CSV (una fila por ciclo) para análisis.
 
 ## 11. Nota importante sobre el alcance
 
-Este simulador (rama `feature/simulador-nucleo`) **amplía** el alcance descrito
-en `WORKPLAN.md` (que se limita a un dispositivo, sin timer, prioridades ni
-anidamiento). Se mantiene en una rama aparte y **debe acordarse con el equipo
-antes de integrarlo a `main`**. Los detalles técnicos están en
-[`ARQUITECTURA.md`](ARQUITECTURA.md).
+El alcance incluye múltiples dispositivos de E/S, prioridades, máscaras y
+anidamiento. Se excluyen temporizador, quantum y planificación de procesos.
+La CPU guarda y restaura el mismo flujo interrumpido.
+Los detalles técnicos están en [`ARQUITECTURA.md`](ARQUITECTURA.md).

@@ -44,9 +44,8 @@
 #define C_FIGBLUE2  (Color){191,224,242,255}
 #define C_DARKTXT   (Color){ 13, 24, 32,255}
 #define C_WIRE      (Color){ 49, 72, 92,255}
-static Color COLP[3] = {{34,211,238,255},{58,217,160,255},{196,166,255,255}};
 
-#define HEADER_H 52
+#define HEADER_H 94
 #define WORLD_W  1360.0f
 #define WORLD_H  862.0f
 
@@ -56,7 +55,7 @@ static int sig_clk[SCOPE_N],sig_irq[SCOPE_N],sig_inta[SCOPE_N],sig_eoi[SCOPE_N],
 static int sig_len=0, prev_eoi=0;
 static void scope_sample(const Simulador *S){
     int clk=S->ciclo%2;
-    int irq=(S->pic.irr[DEV_TIMER]||S->pic.irr[DEV_DISCO]||S->pic.irr[DEV_TECLADO]);
+    int irq=(S->pic.irr[DEV_DISCO]||S->pic.irr[DEV_TECLADO]);
     int inta=(S->in_isr&&S->stage==2);
     int eoi=(S->eoi!=prev_eoi); prev_eoi=S->eoi;
     int data=(S->in_isr&&S->stage>=4)?S->intr_vec:(sig_len?sig_data[sig_len-1]:0);
@@ -126,41 +125,43 @@ static void panel_frame(int i,const char*titulo){
 }
 
 /* ------------------------- posiciones de la escena ------------------------- */
-static Rectangle RCPU={250,150,190,180}, RDRV={212,118,175,62}, RPIC={500,132,112,168}, RISR={250,352,190,42}, RREADY={28,118,118,250};
-static Rectangle RDEV[3];
-static void proc_pos(const Simulador*S,int id,float*ox,float*oy){
-    if(S->cpu==id){*ox=RCPU.x+RCPU.width/2;*oy=RCPU.y+RCPU.height-34;return;}
-    int slot=0,found=0;
-    for(int i=0;i<S->n_ready;i++){ if(S->ready[i]==id){*ox=RREADY.x+RREADY.width/2;*oy=RREADY.y+34+slot*64;found=1;break;} slot++; }
-    if(found)return;
-    int dev=S->proc[id].dispositivo>=0?S->proc[id].dispositivo:S->proc[id].pendiente;
-    if(dev==DEV_DISCO){*ox=RDEV[2].x+RDEV[2].width-30;*oy=RDEV[2].y+30;return;}
-    if(dev==DEV_TECLADO){*ox=RDEV[1].x+RDEV[1].width-30;*oy=RDEV[1].y+30;return;}
-    *ox=RREADY.x+RREADY.width/2;*oy=RREADY.y+34;
-}
+static Rectangle RCPU={250,150,190,180}, RDRV={212,118,175,62}, RPIC={500,132,112,168}, RISR={250,352,190,42};
+static Rectangle RDEV[N_DISPOS];
 
 /* ------------------------- dibujo de cada panel (coords base) ------------------------- */
 static void draw_scene(Simulador*S){
     panel_frame(P_SCENE,"ESCENA DEL HARDWARE");
-    DrawText("COLA DE LISTOS",(int)RREADY.x,(int)RREADY.y-16,10,C_FAINT);
+    DrawText("SOLICITUDES E/S",28,102,10,C_FAINT);
+    for(int d=0;d<N_DISPOS;d++){
+        int y=132+d*100;
+        DrawText(DEV_NOMBRE[d],28,y,12,d==DEV_DISCO?C_ACCENT:C_GOOD);
+        DrawText(TextFormat("En cola: %d",S->dev[d].n_cola),28,y+22,10,C_MUTED);
+        DrawText(TextFormat("Espera ISR: %d",S->dev[d].n_pendientes),28,y+40,10,C_MUTED);
+        DrawText(TextFormat("Atendidas: %d",S->dev[d].completadas),28,y+58,10,C_MUTED);
+    }
     DrawText("CPU",(int)RCPU.x+60,96,10,C_FAINT);
     DrawText("PIC - CONTROLADOR DE INTERRUPCIONES",(int)RPIC.x-40,116,10,C_FAINT);
     DrawText("I/O CONTROLLERS / DISPOSITIVOS",(int)RDEV[0].x-6,92,10,C_FAINT);
-    DrawRectangleRounded(RREADY,0.06f,8,C_PANEL2); DrawRectangleRoundedLinesEx(RREADY,0.06f,8,1,C_BORDER);
     /* buses CPU<->PIC (con flechas) */
     Color cIrq=(S->in_isr&&S->stage==1)?C_BUSIRQ:C_WIRE, cAck=(S->in_isr&&S->stage==2)?C_BUSACK:C_WIRE, cDat=(S->in_isr&&(S->stage==2||S->stage==4))?C_BUSDATA:C_WIRE;
     arrow((Vector2){RPIC.x,175},(Vector2){RCPU.x+RCPU.width,175},2.4f,cIrq);       /* IRQ: PIC->CPU */
     arrow((Vector2){RCPU.x+RCPU.width,205},(Vector2){RPIC.x,205},2.4f,cAck);       /* INTA: CPU->PIC */
     arrow((Vector2){RPIC.x,235},(Vector2){RCPU.x+RCPU.width,235},2.4f,cDat);       /* DATA/vector: PIC->CPU */
-    for(int d=0;d<3;d++){ int di=d==0?DEV_TIMER:d==1?DEV_TECLADO:DEV_DISCO;
-        Color c=S->pic.irr[di]?C_BUSIRQ:C_WIRE;
-        arrow((Vector2){RPIC.x+RPIC.width,RDEV[d].y+30},(Vector2){RDEV[d].x,RDEV[d].y+30},2.0f,C_BUSDATA); /* orden: PIC->dev */
+    for(int d=0;d<N_DISPOS;d++){
+        Color c=S->pic.irr[d]?C_BUSIRQ:C_WIRE;
+        /* Las ordenes parten del driver; el PIC solo recibe las IRQ. */
+        float by=400+d*12;
+        DrawLineEx((Vector2){RDRV.x+RDRV.width,RDRV.y+10+d*12},(Vector2){460+d*12,RDRV.y+10+d*12},1.4f,C_BUSDATA);
+        DrawLineEx((Vector2){460+d*12,RDRV.y+10+d*12},(Vector2){460+d*12,by},1.4f,C_BUSDATA);
+        DrawLineEx((Vector2){460+d*12,by},(Vector2){RDEV[d].x+RDEV[d].width+4+d*2,by},1.4f,C_BUSDATA);
+        DrawLineEx((Vector2){RDEV[d].x+RDEV[d].width+4+d*2,by},(Vector2){RDEV[d].x+RDEV[d].width+4+d*2,RDEV[d].y+30},1.4f,C_BUSDATA);
+        arrow((Vector2){RDEV[d].x+RDEV[d].width+4+d*2,RDEV[d].y+30},(Vector2){RDEV[d].x+RDEV[d].width,RDEV[d].y+30},1.4f,C_BUSDATA);
         arrow((Vector2){RDEV[d].x,RDEV[d].y+50},(Vector2){RPIC.x+RPIC.width,RDEV[d].y+50},2.0f,c);         /* IRQ: dev->PIC */
     }
     /* CPU */
     chip(RCPU,S->in_isr?C_ACCENT:C_BORDER,S->in_isr?2.4f:1.4f);
     ctext((int)(RCPU.x+RCPU.width/2),(int)RCPU.y+62,"CPU",16,C_INK);
-    ctext((int)(RCPU.x+RCPU.width/2),(int)RCPU.y+92,S->cpu>=0?TextFormat("P%d",S->cpu+1):"-",18,C_INK);
+    ctext((int)(RCPU.x+RCPU.width/2),(int)RCPU.y+92,S->in_isr?"Atendiendo E/S":"Flujo principal",13,C_INK);
     ctext((int)(RCPU.x+RCPU.width/2),(int)RCPU.y+116,TextFormat("PC 0x%X",S->pc),9,C_MUTED);
     ctext((int)(RCPU.x+RCPU.width/2),(int)RCPU.y+130,TextFormat("modo %s",S->modo?"kernel":"usuario"),9,C_MUTED);
     DrawCircle((int)RCPU.x+18,(int)RCPU.y+150,4,S->modo?C_WARN:C_GOOD);
@@ -168,46 +169,38 @@ static void draw_scene(Simulador*S){
     DrawCircle((int)RCPU.x+18,(int)RCPU.y+166,4,S->ifbit?C_GOOD:C_DANGER);
     ctext((int)(RCPU.x+RCPU.width/2),(int)RCPU.y+162,TextFormat("IF=%d %s",S->ifbit,S->ifbit?"(IRQ hab.)":"(IRQ enmasc.)"),9,C_MUTED);
     DrawLineEx((Vector2){RCPU.x+RCPU.width/2,RCPU.y+RCPU.height},(Vector2){RCPU.x+RCPU.width/2,RISR.y},1.4f,Fade(C_WARN,0.5f));
-    chip(RISR,(S->in_isr&&S->stage>=5)?C_WARN:C_BORDER,1.4f);
-    ctext((int)(RISR.x+RISR.width/2),(int)RISR.y+15,(S->in_isr&&S->stage>=5)?TextFormat("ISR %s - ejecutando",S->cur_dev>=0?DEV_NOMBRE[S->cur_dev]:""):"ISR - inactivo",10,C_MUTED);
+    chip(RISR,(S->in_isr&&S->stage>=4&&S->stage<=6)?C_WARN:C_BORDER,1.4f);
+    ctext((int)(RISR.x+RISR.width/2),(int)RISR.y+15,
+          S->in_isr?(S->stage==7?"IRET - flujo restaurado":TextFormat("ISR %s",DEV_NOMBRE[S->cur_dev])):"ISR - inactivo",10,C_MUTED);
     /* DRIVER sobre la CPU */
     chip(RDRV,C_DRIVER,S->driver_busy>0?2.4f:1.4f);
     ctext((int)(RDRV.x+RDRV.width/2),(int)RDRV.y+8,"DRIVER",13,C_INK);
-    ctext((int)(RDRV.x+RDRV.width/2),(int)RDRV.y+26,S->driver_busy>0?TextFormat("activo - %s",S->driver_dev>=0?DEV_NOMBRE[S->driver_dev]:""):"ioctl(read)",9,C_MUTED);
+    ctext((int)(RDRV.x+RDRV.width/2),(int)RDRV.y+26,S->driver_busy>0?TextFormat("activo - %s",S->driver_dev>=0?DEV_NOMBRE[S->driver_dev]:""):"lectura de E/S",9,C_MUTED);
     ctext((int)(RDRV.x+RDRV.width/2),(int)RDRV.y+40,S->driver_busy>0?"-> escribe registros":"-> en espera",9,C_MUTED);
     /* PIC */
-    chip(RPIC,(S->pic.irr[0]||S->pic.irr[1]||S->pic.irr[2]||S->pic.n_isr)?C_ACCENT:C_BORDER,1.6f);
-    char mi[4],mm[4],ms[4]; sim_mascara(S->pic.irr,mi); sim_mascara(S->pic.imr,mm); sim_mascara(S->pic.isr,ms);
+    chip(RPIC,(S->pic.irr[DEV_DISCO]||S->pic.irr[DEV_TECLADO]||S->pic.n_isr)?C_ACCENT:C_BORDER,1.6f);
+    char mi[N_DISPOS+1],mm[N_DISPOS+1],ms[N_DISPOS+1]; sim_mascara(S->pic.irr,mi); sim_mascara(S->pic.imr,mm); sim_mascara(S->pic.isr,ms);
     ctext((int)(RPIC.x+RPIC.width/2),(int)RPIC.y+10,"PIC",13,C_INK);
     ctext((int)(RPIC.x+RPIC.width/2),(int)RPIC.y+34,TextFormat("IRR %s",mi),9,C_MUTED);
     ctext((int)(RPIC.x+RPIC.width/2),(int)RPIC.y+48,TextFormat("IMR %s",mm),9,C_MUTED);
     ctext((int)(RPIC.x+RPIC.width/2),(int)RPIC.y+62,TextFormat("ISR %s",ms),9,C_MUTED);
     ctext((int)(RPIC.x+RPIC.width/2),(int)RPIC.y+78,S->pic.en_servicio>=0?TextFormat("-> %s",DEV_NOMBRE[S->pic.en_servicio]):"-",10,C_ACCENT);
     ctext((int)(RPIC.x+RPIC.width/2),(int)RPIC.y+94,TextFormat("EOI %d",S->eoi),9,C_MUTED);
-    int ord[3]={DEV_TIMER,DEV_DISCO,DEV_TECLADO};
-    for(int i=0;i<3;i++){ Color c=S->pic.irr[ord[i]]?C_DANGER:(S->pic.isr[ord[i]]?C_WARN:C_WIRE); DrawCircle((int)RPIC.x+30+i*26,(int)RPIC.y+120,4,c); }
+    for(int d=0;d<N_DISPOS;d++){ Color c=S->pic.irr[d]?C_DANGER:(S->pic.isr[d]?C_WARN:C_WIRE); DrawCircle((int)RPIC.x+40+d*26,(int)RPIC.y+120,4,c); }
     ctext((int)(RPIC.x+RPIC.width/2),(int)RPIC.y+132,"lineas IRQ",8,C_FAINT);
     /* dispositivos */
-    const char*dl[3]={"Timer","Teclado","Disco"}; int di3[3]={DEV_TIMER,DEV_TECLADO,DEV_DISCO};
-    for(int i=0;i<3;i++){ Rectangle rd=RDEV[i]; int di=di3[i];
-        int act=(di==DEV_TIMER)?(S->timer<=1):(S->dev[di].sirviendo>=0);
+    for(int di=0;di<N_DISPOS;di++){ Rectangle rd=RDEV[di];
+        int act=S->dev[di].sirviendo>=0;
         chip(rd,act?C_ACCENT:C_BORDER,act?2.2f:1.4f);
-        DrawText(TextFormat("%s controller",dl[i]),(int)rd.x+12,(int)rd.y+10,12,C_INK);
+        DrawText(TextFormat("%s controller",DEV_NOMBRE[di]),(int)rd.x+12,(int)rd.y+10,12,C_INK);
         Rectangle bar={rd.x+12,rd.y+34,rd.width-24,10}; DrawRectangleRounded(bar,1,6,C_PANEL2);
         float frac=0; const char*st="libre";
-        if(di==DEV_TIMER){frac=1.0f-(float)S->timer/S->quantum;st=TextFormat("quantum %d",S->timer);}
-        else if(S->dev[di].sirviendo>=0){int sv=DEV_SERV[di];frac=1.0f-(float)S->dev[di].restante/(sv>0?sv:1);st=TextFormat("atiende P%d (%d)",S->dev[di].sirviendo+1,S->dev[di].restante);}
+        if(S->dev[di].sirviendo>=0){int sv=DEV_SERV[di];frac=1.0f-(float)S->dev[di].restante/sv;st=TextFormat("E/S #%d (%d)",S->dev[di].sirviendo,S->dev[di].restante);}
         else if(S->dev[di].n_cola>0){frac=0.15f;st=TextFormat("cola: %d",S->dev[di].n_cola);}
         if(frac<0)frac=0;
         if(frac>1)frac=1;
-        DrawRectangleRounded((Rectangle){bar.x,bar.y,bar.width*frac,bar.height},1,6,di==DEV_TIMER?C_WARN:C_ACCENT);
+        DrawRectangleRounded((Rectangle){bar.x,bar.y,bar.width*frac,bar.height},1,6,di==DEV_DISCO?C_ACCENT:C_GOOD);
         DrawText(st,(int)rd.x+12,(int)rd.y+52,9,C_MUTED);
-    }
-    for(int id=0;id<3;id++){ float ox,oy; proc_pos(S,id,&ox,&oy);
-        int bl=(S->proc[id].estado==PROC_BLOQUEADO);
-        DrawCircle((int)ox,(int)oy,15,Fade(COLP[id],bl?0.55f:1.0f));
-        if(S->cpu==id)DrawCircleLines((int)ox,(int)oy,17,C_WARN);
-        ctext((int)ox,(int)oy-6,TextFormat("P%d",id+1),12,C_DARKTXT);
     }
 }
 static void draw_scope(void){
@@ -229,22 +222,21 @@ static void draw_scope(void){
 }
 static void draw_met(Simulador*S){
     panel_frame(P_MET,"INSTRUMENTACION"); Rectangle r=PBASE[P_MET];
-    const char*ml[9]={"CICLO","IRQ ATEND.","CAMBIOS CTX","USO CPU","LAT IRQ->ISR","E/S COMPL.","ANIDAMIENTOS","EOI EMITIDOS","IRR PEND."};
+    const char*ml[9]={"CICLO","IRQ ATEND.","CTX ISR","USO CPU","LAT IRQ->ISR","E/S COMPL.","ANIDAMIENTOS","EOI EMITIDOS","IRR PEND."};
     Color mc[9]={C_ACCENT,C_DANGER,C_WARN,C_GOOD,C_WARN,C_ACCENT,C_INK,C_INK,C_DANGER}; char mv[9][16];
-    snprintf(mv[0],16,"%d",S->ciclo); snprintf(mv[1],16,"%d",S->irq); snprintf(mv[2],16,"%d",S->ctx);
+    snprintf(mv[0],16,"%d",S->ciclo); snprintf(mv[1],16,"%d",S->irq); snprintf(mv[2],16,"%d",S->contextos_guardados);
     snprintf(mv[3],16,"%d%%",S->ciclo?(int)(100L*S->busy/S->ciclo):0); snprintf(mv[4],16,"%d c",S->irq?S->lat_sum/S->irq:0);
     snprintf(mv[5],16,"%d",S->es); snprintf(mv[6],16,"%d",S->nest); snprintf(mv[7],16,"%d",S->eoi);
-    snprintf(mv[8],16,"%d",S->pic.irr[0]+S->pic.irr[1]+S->pic.irr[2]);
+    snprintf(mv[8],16,"%d",S->pic.irr_count[DEV_DISCO]+S->pic.irr_count[DEV_TECLADO]);
     float mw=(r.width-24-8*3)/9.0f;
     for(int i=0;i<9;i++){ Rectangle mr={r.x+12+i*(mw+3),r.y+34,mw,66};
         DrawRectangleRounded(mr,0.12f,6,C_PANEL2); DrawRectangleRoundedLinesEx(mr,0.12f,6,1,C_BORDER);
         DrawText(mv[i],(int)mr.x+8,(int)mr.y+10,18,mc[i]); DrawText(ml[i],(int)mr.x+8,(int)mr.y+42,8,C_FAINT); }
 }
 static void draw_ivt(Simulador*S,Vector2 lm,int can_click){
-    panel_frame(P_IVT,"TABLA DE VECTORES (IVT)  -  clic para enmascarar"); Rectangle r=PBASE[P_IVT];
+    panel_frame(P_IVT,"TABLA DE VECTORES (IVT)"); Rectangle r=PBASE[P_IVT];
     DrawText("Vec    Fuente     Prio   ISR            Masc",(int)r.x+14,(int)r.y+30,11,C_FAINT);
-    int ov[3]={DEV_TIMER,DEV_DISCO,DEV_TECLADO};
-    for(int i=0;i<3;i++){ int d=ov[i]; float ry=r.y+48+i*22; Rectangle row={r.x+10,ry,r.width-20,20};
+    for(int d=0;d<N_DISPOS;d++){ float ry=r.y+48+d*22; Rectangle row={r.x+10,ry,r.width-20,20};
         int hover=CheckCollisionPointRec(lm,row);
         if(hover)DrawRectangleRounded(row,0.2f,4,Fade(C_ACCENT,0.08f));
         if(hover&&can_click&&IsMouseButtonPressed(MOUSE_BUTTON_LEFT))S->pic.imr[d]=!S->pic.imr[d];
@@ -258,13 +250,12 @@ static void draw_ivt(Simulador*S,Vector2 lm,int can_click){
 }
 static void draw_dev(Simulador*S){
     panel_frame(P_DEV,"ESTADO DE DISPOSITIVOS"); Rectangle r=PBASE[P_DEV];
-    const char*nm[3]={"Timer","Teclado","Disco"}; int di[3]={DEV_TIMER,DEV_TECLADO,DEV_DISCO};
-    for(int i=0;i<3;i++){ float ry=r.y+30+i*20; DrawText(nm[i],(int)r.x+14,(int)ry,11,C_MUTED);
-        const char*v="libre"; int d=di[i];
-        if(d==DEV_TIMER)v=TextFormat("quantum %d",S->timer);
-        else if(S->dev[d].sirviendo>=0)v=TextFormat("P%d (%d)",S->dev[d].sirviendo+1,S->dev[d].restante);
+    for(int d=0;d<N_DISPOS;d++){ float ry=r.y+30+d*24; DrawText(DEV_NOMBRE[d],(int)r.x+14,(int)ry,11,C_MUTED);
+        const char*v="libre";
+        if(S->dev[d].sirviendo>=0)v=TextFormat("E/S #%d (%d)",S->dev[d].sirviendo,S->dev[d].restante);
         else if(S->dev[d].n_cola>0)v=TextFormat("cola %d",S->dev[d].n_cola);
-        DrawText(v,(int)r.x+120,(int)ry,11,C_INK); }
+        DrawText(v,(int)r.x+120,(int)ry,11,C_INK);
+        DrawText(TextFormat("Espera ISR: %d",S->dev[d].n_pendientes),(int)r.x+270,(int)ry,11,C_MUTED); }
 }
 static void draw_log(Simulador*S){
     panel_frame(P_LOG,"BITACORA DE EVENTOS"); Rectangle r=PBASE[P_LOG];
@@ -284,13 +275,13 @@ static void draw_flow(Simulador*S){
                       {fx+8,fy+146,190,50},{fx+8,fy+214,190,44},{fx+8,fy+276,190,40} };
     const char*T[6]={"1 device driver\ninitiates I/O","2 initiates I/O","3 input ready/\ncomplete -> IRQ",
                      "4 CPU recibe IRQ\n-> handler","5 handler procesa\n(IRET)","6 CPU reanuda"};
-    int isrDev=S->in_isr&&S->cur_dev>=0&&S->cur_dev!=DEV_TIMER;
+    int isrDev=S->in_isr&&S->cur_dev>=0;
     int devIrq=S->pic.irr[DEV_DISCO]||S->pic.irr[DEV_TECLADO];
     int sirv=S->dev[DEV_DISCO].sirviendo>=0||S->dev[DEV_TECLADO].sirviendo>=0;
     int act[6]={0}; if(S->driver_busy>0){act[0]=1;act[1]=1;} if(sirv)act[2]=1;
     if(devIrq||(isrDev&&S->stage<=2))act[3]=1;
-    if(isrDev&&S->stage>=1&&S->stage<=4)act[4]=1;
-    if(isrDev&&S->stage>=5&&S->stage<=7)act[5]=1;
+    if(isrDev&&S->stage>=3&&S->stage<=6)act[4]=1;
+    if(isrDev&&S->stage==7)act[5]=1;
     DrawText("CPU",(int)FN[0].x+70,(int)fy+2,11,C_MUTED); DrawText("I/O controller",(int)FN[1].x+40,(int)fy+2,11,C_MUTED);
     Color base[6]={C_PANEL2,C_FIGBLUE,C_FIGGRAY,C_PANEL2,C_FIGBLUE2,C_PANEL2};
     Color af=C_FAINT;
@@ -310,15 +301,21 @@ static void draw_flow(Simulador*S){
             ctext((int)(FN[i].x+FN[i].width/2),(int)FN[i].y+8,l1,9,tc); ctext((int)(FN[i].x+FN[i].width/2),(int)FN[i].y+22,l2,9,tc);}
         else ctext((int)(FN[i].x+FN[i].width/2),(int)FN[i].y+14,t,9,tc); }
     int paso=isrDev?S->stage:devIrq?4:sirv?3:S->driver_busy>0?1:0;
-    const char*E[7]={"Driver inicia la E/S","CPU -> controller","Controlador ejecuta la E/S","Controlador genera la IRQ","CPU salta al handler","Handler procesa - EOI","CPU reanuda la tarea"};
+    const char*E[7]={"Driver inicia la E/S","CPU -> controller","Controlador ejecuta la E/S","Controlador genera la IRQ","CPU salta al handler","Handler procesa - EOI","CPU reanuda el flujo"};
+    const char*EI[7]={"IRQ aceptada","INTA al PIC","Contexto preservado","Vector -> ISR","Atencion / EOI temprano","Resultado E/S y EOI","IRET: flujo restaurado"};
     Rectangle bg={pf.x+12,pf.y+348,pf.width-24,28}; DrawRectangleRounded(bg,0.2f,6,C_PANEL2); DrawRectangleRoundedLinesEx(bg,0.2f,6,1,C_BORDER);
     DrawText(TextFormat("PASO %d / 7",paso),(int)bg.x+10,(int)bg.y+6,11,C_WARN);
-    DrawText(paso?E[paso-1]:"en espera de una interrupcion",(int)bg.x+90,(int)bg.y+8,11,C_INK);
+    DrawText(paso?(isrDev?EI[paso-1]:E[paso-1]):"en espera de una interrupcion",(int)bg.x+90,(int)bg.y+8,11,C_INK);
 }
 
 int main(void){
     SetConfigFlags(FLAG_MSAA_4X_HINT|FLAG_WINDOW_RESIZABLE);
+#ifdef HEADLESS_CAPTURE
+    SetConfigFlags(FLAG_WINDOW_HIDDEN);
+#endif
     InitWindow(1360,780,"Simulador de Interrupciones - E/S dirigida por interrupciones (Fig. 1.4)");
+    SetWindowMinSize(1060,600);
+    SetTextureFilter(GetFontDefault().texture,TEXTURE_FILTER_BILINEAR);
     SetTargetFPS(60);
     Simulador S; sim_init(&S); scope_sample(&S);
     for(int i=0;i<NP;i++){poff[i]=(Vector2){0,0};pvis[i]=1;}
@@ -375,7 +372,7 @@ int main(void){
 
         /* ================= LIENZO (mundo, con zoom/pan) ================= */
         BeginMode2D(cam);
-        RDEV[0]=(Rectangle){700,108,175,78}; RDEV[1]=(Rectangle){700,200,175,78}; RDEV[2]=(Rectangle){700,292,175,78};
+        RDEV[DEV_DISCO]=(Rectangle){680,148,175,78}; RDEV[DEV_TECLADO]=(Rectangle){680,270,175,78};
         for(int i=0;i<NP;i++){ if(!pvis[i])continue;
             rlPushMatrix(); rlTranslatef(poff[i].x,poff[i].y,0);
             int canclick = (dragging<0) && in_canvas;
@@ -401,11 +398,11 @@ int main(void){
         DrawCircle(166,38,4,reproduciendo?C_GOOD:C_WARN);
         DrawText(reproduciendo?"EN VIVO":"EN PAUSA",176,32,12, reproduciendo?C_GOOD:C_WARN);
 
-        Rectangle bPlay={330,10,116,32},bStep={452,10,80,32},bReset={538,10,96,32};
+        Rectangle bPlay={12,52,116,32},bStep={134,52,80,32},bReset={220,52,96,32};
         if(boton(bPlay,reproduciendo?"|| Pausa":"> Reproducir",reproduciendo))reproduciendo=!reproduciendo;
         if(boton(bStep,">| Paso",0)){reproduciendo=0;sim_tick(&S);scope_sample(&S);}
         if(boton(bReset,"<< Reiniciar",0)){sim_init(&S);sig_len=0;prev_eoi=0;scope_sample(&S);reproduciendo=0;}
-        Rectangle tAn={646,10,86,32},tEo={738,10,126,32},tAs={870,10,126,32};
+        Rectangle tAn={328,52,86,32},tEo={420,52,126,32},tAs={552,52,126,32};
         if(toggle(tAn,"anidar",S.t_anidar))S.t_anidar=!S.t_anidar;
         if(toggle(tEo,"EOI temprano",S.t_eoi_temprano))S.t_eoi_temprano=!S.t_eoi_temprano;
         if(toggle(tAs,"E/S asincrona",S.t_asincrono))S.t_asincrono=!S.t_asincrono;
@@ -421,7 +418,6 @@ int main(void){
         Rectangle bFit={GetScreenWidth()-212,10,70,32}, bCfg={GetScreenWidth()-134,10,78,32};
         if(boton(bFit,"Ajustar",0))fit_pending=1;
         if(boton(bCfg,"Config",show_config))show_config=!show_config;
-        DrawText("rueda: zoom  |  arrastre der.: mover  |  F: ajustar",GetScreenWidth()-460,GetScreenHeight()-18,10,C_FAINT);
 
         /* ================= POPUP CONFIG ================= */
         if(show_config){ Rectangle cp={GetScreenWidth()-244,HEADER_H+6,236,300};
@@ -438,7 +434,12 @@ int main(void){
 #ifdef HEADLESS_CAPTURE
         { static int fr=0; fr++;
           if(fr==4) TakeScreenshot("gui1.png");
-          if(fr==5){ S.t_anidar=1; for(int k=0;k<160;k++){sim_tick(&S);scope_sample(&S);} }
+          if(fr==5){
+              S.t_anidar=1;
+              for(int k=0;k<160;k++){sim_tick(&S);scope_sample(&S);}
+              SetWindowSize(1060,600);
+              fit_pending=1;
+          }
           if(fr==9){ TakeScreenshot("gui2.png"); break; }
         }
 #endif
